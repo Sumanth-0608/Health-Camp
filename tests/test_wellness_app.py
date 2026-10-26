@@ -1,6 +1,7 @@
 import os
 import io
 import unittest
+from unittest.mock import patch
 from datetime import date, timedelta, datetime
 from app import create_app
 from app.models import (
@@ -8,13 +9,54 @@ from app.models import (
     WaterLog, MovementEntry, HabitDay, Measurement, BloodReport, 
     WeeklyScore, SupportConversation, SupportMessage
 )
-from app.config import Config
+from app.config import Config, _database_uri, _secret_key
 
 class TestConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     WTF_CSRF_ENABLED = False
     SECRET_KEY = "test-secret-key-12345"
+
+
+class DatabaseConfigTests(unittest.TestCase):
+    def test_local_database_defaults_to_sqlite(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertTrue(_database_uri().startswith("sqlite:///"))
+
+    def test_production_requires_database_url(self):
+        with patch.dict(os.environ, {"VERCEL": "1"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "DATABASE_URL is required"):
+                _database_uri()
+
+    def test_production_rejects_sqlite(self):
+        with patch.dict(os.environ, {"APP_ENV": "production", "DATABASE_URL": "sqlite:///local.db"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "must use a PostgreSQL URL"):
+                _database_uri()
+
+    def test_production_rejects_malformed_database_url(self):
+        with patch.dict(os.environ, {"VERCEL": "1", "DATABASE_URL": "postgresql://"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "include the PostgreSQL host"):
+                _database_uri()
+
+    def test_postgres_url_uses_psycopg_driver(self):
+        with patch.dict(os.environ, {"DATABASE_URL": "postgres://db.invalid/wellness"}, clear=True):
+            self.assertEqual(
+                _database_uri(),
+                "postgresql+psycopg://db.invalid/wellness",
+            )
+
+    def test_production_requires_secret_key(self):
+        with patch.dict(os.environ, {"APP_ENV": "production"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "SECRET_KEY must be set"):
+                _secret_key()
+
+    def test_development_secret_is_generated_when_unset(self):
+        with patch.dict(os.environ, {}, clear=True):
+            first_secret = _secret_key()
+            second_secret = _secret_key()
+        self.assertGreaterEqual(len(first_secret), 32)
+        self.assertNotEqual(first_secret, second_secret)
+
 
 class WellnessTrackerTests(unittest.TestCase):
     def setUp(self):

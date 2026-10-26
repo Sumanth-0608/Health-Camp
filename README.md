@@ -95,19 +95,21 @@ Copy `.env.example` to `.env`:
 ```bash
 copy .env.example .env
 ```
-Default configuration works out of the box with SQLite.
+Local development uses SQLite by default. Production requires a hosted PostgreSQL URL in `DATABASE_URL` and a private `SECRET_KEY`.
 
-### 5. Initialize the Database & Seed Default Coaches & Admin
-Run the initialization script:
+### 5. Initialize the Database & Seed Default Coaches
+Run the explicit initialization script against the database selected by `DATABASE_URL`:
 ```bash
-python init_db.py --create-admin
+python init_db.py
 ```
 This will:
-- Create all SQLite database tables with indexes and foreign keys.
+- Create missing database tables without dropping existing tables or data.
 - Seed the 4 default wellness coaches (*Sarah Jenkins, Dr. Michael Chen, Priya Sharma, David Miller*).
-- Create the default administrator account:
-  - **Email:** `admin@90daywellness.com`
-  - **Password:** `AdminWellness@2026`
+
+To create an administrator, opt in explicitly and provide an unused email. The script prompts for the account details and password; it does not create or reset an admin by default:
+```bash
+python init_db.py --create-admin --admin-email you@example.com
+```
 
 ### 6. Start the Web Application
 ```bash
@@ -157,23 +159,19 @@ python -m unittest tests/test_wellness_app.py
 
 ---
 
-## 📦 Production Deployment Guide
+## Production Deployment
 
-For deploying to production (e.g. AWS, Render, DigitalOcean, Heroku):
-1. **Set Production Environment Variables:**
-   ```bash
-   SECRET_KEY=<generate-a-random-64-character-string>
-   DATABASE_URL=postgresql://user:password@db-host:5432/wellness_db
-   DEBUG=False
-   ```
-2. **PostgreSQL Support:**
-   Install psycopg2: `pip install psycopg2-binary`. SQLAlchemy automatically handles PostgreSQL dialect queries.
-3. **Persistent File Storage:**
-   Configure a persistent volume mount for `uploads/` or integrate AWS S3 / Cloud Storage in `app/utils.py`.
-4. **WSGI Server:**
-   Run with Gunicorn or Waitress:
-   ```bash
-   gunicorn -w 4 -b 0.0.0.0:5000 "app:create_app()"
-   ```
-#   H e a l t h - C a m p  
+For Vercel, create a hosted PostgreSQL database with a provider of your choice. Copy its application connection URL from that provider's dashboard; do not use a locally invented URL. Add these Vercel Environment Variables for the Production environment:
+
+- `DATABASE_URL`: the provider's PostgreSQL connection URL. The app accepts `postgres://` or `postgresql://` and uses the Psycopg 3 driver.
+- `SECRET_KEY`: a privately generated, high-entropy value. Do not commit it or use the development placeholder.
+- `APP_ENV`: `production`.
+
+Install dependencies and initialize the database once, explicitly, using `python init_db.py` with `DATABASE_URL` set to the same hosted database. This creates missing tables and seeds coaches; it does not create an administrator unless `--create-admin` is explicitly supplied. The project does not currently include a schema migration framework, so use a migration process before future schema changes.
+
+Vercel's function filesystem is temporary. The current upload code writes photos and reports under `UPLOAD_FOLDER`, so production uploads need external persistent object storage and corresponding storage integration in `app/utils.py` and the upload route. Setting `UPLOAD_FOLDER` to a Vercel path alone does not make uploaded files durable.
+
+The local SQLite database is for development only. Vercel app imports do not create tables or run the initialization script.
+#   H e a l t h - C a m p 
+ 
  
