@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Configure Action Steps - {{ participant.full_name }} - Admin Portal{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <!-- Header -->
+    <div class="flex items-center space-x-2">
+        <a href="{{ url_for('admin.participant_detail', user_id=participant.id) }}" class="text-xs font-semibold text-emerald-700 hover:underline">&larr; Back to {{ participant.full_name }}</a>
+        <span class="text-gray-300">•</span>
+        <span class="text-xs font-bold text-gray-500 uppercase">Coach Configuration</span>
+    </div>
+
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-6">
+        <div>
+            <span class="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full">Habit Architecture</span>
+            <h1 class="text-2xl font-extrabold text-wellness-deep mt-2">
+                Configure Weekly Action Steps for {{ participant.full_name }}
+            </h1>
+            <p class="text-xs text-gray-500 mt-1">
+                Assign the 3 micro-habits the participant will check off daily (Mon-Sun).
+            </p>
+        </div>
+
+        <!-- Week Selector Tabs -->
+        <div class="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+            {% for w in range(1, 13) %}
+                <a href="{{ url_for('admin.habits_config', user_id=participant.id, week=w) }}" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {% if w == week_num %}bg-emerald-700 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                    Week {{ w }}
+                </a>
+            {% endfor %}
+        </div>
+
+        <!-- Configuration Form -->
+        <form action="{{ url_for('admin.habits_config', user_id=participant.id, week=week_num) }}" method="POST" class="space-y-4 pt-4 border-t border-gray-100">
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Week Date Range Label</label>
+                <input type="text" name="date_range_label" value="{{ habit_week.date_range_label if habit_week else '' }}" placeholder="e.g. Oct 26 - Nov 01" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-xs">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-emerald-900 mb-1">1. Action Step One</label>
+                <input type="text" name="step_1" value="{{ habit_week.step_1 if habit_week else '' }}" required placeholder="e.g. Drink 3L water throughout the day" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-emerald-900 mb-1">2. Action Step Two</label>
+                <input type="text" name="step_2" value="{{ habit_week.step_2 if habit_week else '' }}" required placeholder="e.g. 30 minutes brisk morning walk" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-emerald-900 mb-1">3. Action Step Three</label>
+                <input type="text" name="step_3" value="{{ habit_week.step_3 if habit_week else '' }}" required placeholder="e.g. No screen time 30 mins before sleep" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm">
+            </div>
+
+            <div class="pt-4 flex justify-between items-center">
+                <a href="{{ url_for('admin.participant_detail', user_id=participant.id) }}" class="px-5 py-2.5 bg-gray-100 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-200 transition">
+                    Cancel
+                </a>
+                <button type="submit" class="px-8 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-md transition">
+                    Save Week {{ week_num }} Steps
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

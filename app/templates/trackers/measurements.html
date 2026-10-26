@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block title %}Measurements Tracker - 90-Day Wellness{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <!-- Header with Workbook Guidance -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <span class="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full">Weekly Tracking</span>
+            <h1 class="text-3xl font-extrabold text-wellness-deep mt-1">Measurements Tracker — Every 7 Days</h1>
+            <p class="text-xs sm:text-sm text-emerald-800 font-medium mt-1">
+                "Same day of the week, first thing in the morning, same clothes. Waist matters more than weight."
+            </p>
+        </div>
+        <button onclick="document.getElementById('entry-form-container').scrollIntoView({behavior: 'smooth'})" class="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-md transition">
+            + Log New Measurement
+        </button>
+    </div>
+
+    <!-- Excel Change So Far Box (Row 20-22 of Measurements Sheet) -->
+    <div class="bg-emerald-950 text-white rounded-3xl p-6 sm:p-8 shadow-md">
+        <div class="mb-4">
+            <span class="text-xs uppercase font-bold tracking-widest text-emerald-300">CHANGE SO FAR</span>
+            <h2 class="text-xl font-bold text-white mt-0.5">Latest Minus Start (Auto-Calculated)</h2>
+            <p class="text-xs text-emerald-200 mt-1">Example from workbook: Start 78.4kg / Week 8 75.6kg &rarr; shows -2.8kg automatically.</p>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <!-- Weight -->
+            <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                <span class="text-[11px] uppercase font-bold text-emerald-300 block">Weight (kg)</span>
+                <span class="text-2xl font-black mt-1 block {% if changes.weight_kg is not none and changes.weight_kg <= 0 %}text-emerald-300{% elif changes.weight_kg is not none %}text-amber-300{% else %}text-white{% endif %}">
+                    {% if changes.weight_kg is not none %}
+                        {{ '+' if changes.weight_kg > 0 else '' }}{{ changes.weight_kg }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </span>
+            </div>
+            <!-- Waist -->
+            <div class="bg-white/20 backdrop-blur p-4 rounded-2xl border border-emerald-400 text-center">
+                <span class="text-[11px] uppercase font-bold text-white block">Waist (cm) ⭐</span>
+                <span class="text-2xl font-black mt-1 block {% if changes.waist_cm is not none and changes.waist_cm <= 0 %}text-emerald-300{% elif changes.waist_cm is not none %}text-amber-300{% else %}text-white{% endif %}">
+                    {% if changes.waist_cm is not none %}
+                        {{ '+' if changes.waist_cm > 0 else '' }}{{ changes.waist_cm }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </span>
+            </div>
+            <!-- Hips -->
+            <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                <span class="text-[11px] uppercase font-bold text-emerald-300 block">Hips (cm)</span>
+                <span class="text-2xl font-black mt-1 block">
+                    {% if changes.hips_cm is not none %}
+                        {{ '+' if changes.hips_cm > 0 else '' }}{{ changes.hips_cm }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </span>
+            </div>
+            <!-- Chest -->
+            <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                <span class="text-[11px] uppercase font-bold text-emerald-300 block">Chest (cm)</span>
+                <span class="text-2xl font-black mt-1 block">
+                    {% if changes.chest_cm is not none %}
+                        {{ '+' if changes.chest_cm > 0 else '' }}{{ changes.chest_cm }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </span>
+            </div>
+            <!-- Upper arm -->
+            <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                <span class="text-[11px] uppercase font-bold text-emerald-300 block">Upper Arm (cm)</span>
+                <span class="text-2xl font-black mt-1 block">
+                    {% if changes.upper_arm_cm is not none %}
+                        {{ '+' if changes.upper_arm_cm > 0 else '' }}{{ changes.upper_arm_cm }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </span>
+            </div>
+            <!-- Thigh -->
+            <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                <span class="text-[11px] uppercase font-bold text-emerald-300 block">Thigh (cm)</span>
+                <span class="text-2xl font-black mt-1 block">
+                    {% if changes.thigh_cm is not none %}
+                        {{ '+' if changes.thigh_cm > 0 else '' }}{{ changes.thigh_cm }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Graph -->
+    {% if chart_weights and chart_weights | length > 0 %}
+        <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm">
+            <h3 class="font-bold text-gray-900 text-lg mb-4 pb-2 border-b border-gray-100">Weight & Waist Trajectory</h3>
+            <div class="relative h-72">
+                <canvas id="measurementsFullChart"></canvas>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Measurements Table (Replicates Workbook Rows 5-18) -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm">
+        <h3 class="font-bold text-gray-900 text-lg mb-4 pb-2 border-b border-gray-100">
+            All 12 Weeks Table
+        </h3>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                    <tr class="bg-emerald-950 text-white uppercase text-[11px] tracking-wider">
+                        <th class="p-3">Week</th>
+                        <th class="p-3">Date</th>
+                        <th class="p-3">Weight (kg)</th>
+                        <th class="p-3 bg-emerald-900">Waist (cm)</th>
+                        <th class="p-3">Hips (cm)</th>
+                        <th class="p-3">Chest (cm)</th>
+                        <th class="p-3">Upper Arm (cm)</th>
+                        <th class="p-3">Thigh (cm)</th>
+                        <th class="p-3">Notes</th>
+                        <th class="p-3 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for r in records %}
+                        <tr class="hover:bg-gray-50 {% if r.week_number == 0 %}bg-emerald-50/50 font-bold{% endif %}">
+                            <td class="p-3 font-bold text-gray-900">{{ r.week_label }}</td>
+                            <td class="p-3 text-gray-600">{{ r.date | format_date if r.date else '—' }}</td>
+                            <td class="p-3 font-semibold">{{ r.weight_kg if r.weight_kg is not none else '—' }}</td>
+                            <td class="p-3 font-bold text-emerald-900 bg-emerald-50/40">{{ r.waist_cm if r.waist_cm is not none else '—' }}</td>
+                            <td class="p-3">{{ r.hips_cm if r.hips_cm is not none else '—' }}</td>
+                            <td class="p-3">{{ r.chest_cm if r.chest_cm is not none else '—' }}</td>
+                            <td class="p-3">{{ r.upper_arm_cm if r.upper_arm_cm is not none else '—' }}</td>
+                            <td class="p-3">{{ r.thigh_cm if r.thigh_cm is not none else '—' }}</td>
+                            <td class="p-3 text-gray-400 max-w-xs truncate">{{ r.notes or '—' }}</td>
+                            <td class="p-3 text-right">
+                                <button onclick="populateForm({{ r.week_number }}, '{{ r.date.strftime('%Y-%m-%d') if r.date else '' }}', '{{ r.weight_kg if r.weight_kg is not none else '' }}', '{{ r.waist_cm if r.waist_cm is not none else '' }}', '{{ r.hips_cm if r.hips_cm is not none else '' }}', '{{ r.chest_cm if r.chest_cm is not none else '' }}', '{{ r.upper_arm_cm if r.upper_arm_cm is not none else '' }}', '{{ r.thigh_cm if r.thigh_cm is not none else '' }}', '{{ r.notes or '' }}')" class="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded font-bold transition">
+                                    Edit
+                                </button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Input / Update Form Container -->
+    <div id="entry-form-container" class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm">
+        <h3 class="font-bold text-gray-900 text-lg mb-6 pb-2 border-b border-gray-100 flex items-center">
+            <span class="text-xl mr-2">✏️</span>
+            Enter / Update Weekly Measurements
+        </h3>
+
+        <form action="{{ url_for('trackers.measurements') }}" method="POST" class="space-y-6">
+            <input type="hidden" name="action" value="save_entry">
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Select Program Period</label>
+                    <select id="f_week_number" name="week_number" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 text-sm">
+                        {% for r in records %}
+                            <option value="{{ r.week_number }}">{{ r.week_label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Measurement Date</label>
+                    <input type="date" id="f_date" name="date" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 text-sm">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-gray-700 mb-1">Weight (kg)</label>
+                    <input type="number" step="0.1" id="f_weight" name="weight_kg" placeholder="78.4" class="w-full px-3 py-2 rounded-xl border border-gray-300 text-sm">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-emerald-800 mb-1">Waist (cm) ⭐</label>
+                    <input type="number" step="0.1" id="f_waist" name="waist_cm" placeholder="88.0" class="w-full px-3 py-2 rounded-xl border border-emerald-400 bg-emerald-50/20 text-sm font-bold">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-gray-700 mb-1">Hips (cm)</label>
+                    <input type="number" step="0.1" id="f_hips" name="hips_cm" placeholder="102.5" class="w-full px-3 py-2 rounded-xl border border-gray-300 text-sm">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-gray-700 mb-1">Chest (cm)</label>
+                    <input type="number" step="0.1" id="f_chest" name="chest_cm" placeholder="98.0" class="w-full px-3 py-2 rounded-xl border border-gray-300 text-sm">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-gray-700 mb-1">Upper Arm (cm)</label>
+                    <input type="number" step="0.1" id="f_arm" name="upper_arm_cm" placeholder="31.5" class="w-full px-3 py-2 rounded-xl border border-gray-300 text-sm">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-gray-700 mb-1">Thigh (cm)</label>
+                    <input type="number" step="0.1" id="f_thigh" name="thigh_cm" placeholder="56.0" class="w-full px-3 py-2 rounded-xl border border-gray-300 text-sm">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Notes (Optional)</label>
+                <input type="text" id="f_notes" name="notes" placeholder="e.g. Measured 7am before breakfast" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 text-sm">
+            </div>
+
+            <button type="submit" class="px-8 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-sm shadow-md transition">
+                Save Measurements
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function populateForm(weekNum, dateStr, weight, waist, hips, chest, arm, thigh, notes) {
+        document.getElementById('f_week_number').value = weekNum;
+        document.getElementById('f_date').value = dateStr;
+        document.getElementById('f_weight').value = weight;
+        document.getElementById('f_waist').value = waist;
+        document.getElementById('f_hips').value = hips;
+        document.getElementById('f_chest').value = chest;
+        document.getElementById('f_arm').value = arm;
+        document.getElementById('f_thigh').value = thigh;
+        document.getElementById('f_notes').value = notes;
+        document.getElementById('entry-form-container').scrollIntoView({behavior: 'smooth'});
+    }
+
+    {% if chart_weights and chart_weights | length > 0 %}
+    const fullCtx = document.getElementById('measurementsFullChart').getContext('2d');
+    new Chart(fullCtx, {
+        type: 'line',
+        data: {
+            labels: {{ chart_labels | tojson }},
+            datasets: [
+                {
+                    label: 'Weight (kg)',
+                    data: {{ chart_weights | tojson }},
+                    borderColor: '#0f766e',
+                    backgroundColor: 'rgba(15, 118, 110, 0.1)',
+                    tension: 0.2,
+                    fill: false,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Waist (cm)',
+                    data: {{ chart_waists | tojson }},
+                    borderColor: '#15803d',
+                    backgroundColor: 'rgba(21, 128, 61, 0.1)',
+                    tension: 0.2,
+                    fill: false,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    title: { display: true, text: 'Weight (kg)' }
+                },
+                y1: {
+                    type: 'linear',
+                    position: 'right',
+                    title: { display: true, text: 'Waist (cm)' },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+    {% endif %}
+</script>
+{% endblock %}

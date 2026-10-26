@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Water & Hydration Tracker - Day {{ program_day }} - 90-Day Wellness{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <!-- Header with Date Stepper -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <div class="flex items-center space-x-2">
+                <span class="px-2.5 py-0.5 text-xs font-bold bg-sky-100 text-sky-800 rounded-full">Day {{ program_day }} of 90</span>
+                <span class="text-xs text-gray-500">•</span>
+                <span class="text-xs font-semibold text-gray-600">{{ target_date | format_date }}</span>
+            </div>
+            <h1 class="text-3xl font-extrabold text-wellness-deep mt-1">Water & Hydration Tracker</h1>
+            <p class="text-xs text-gray-500 mt-1">Track every sip throughout the day to meet your coaching hydration target.</p>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <a href="{{ url_for('trackers.water', date=prev_date.strftime('%Y-%m-%d')) }}" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">&larr; Prev Day</a>
+            <input type="date" value="{{ target_date.strftime('%Y-%m-%d') }}" onchange="window.location.href='{{ url_for('trackers.water') }}?date=' + this.value" class="px-3 py-1.5 rounded-xl border border-gray-300 text-xs">
+            <a href="{{ url_for('trackers.water', date=next_date.strftime('%Y-%m-%d')) }}" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">Next Day &rarr;</a>
+        </div>
+    </div>
+
+    <!-- Progress Card -->
+    <div class="bg-gradient-to-r from-sky-600 to-teal-700 rounded-3xl p-6 sm:p-8 text-white shadow-lg">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div>
+                <span class="text-xs uppercase font-bold tracking-wider text-sky-200">Daily Hydration Status</span>
+                <div class="flex items-baseline space-x-3 mt-1">
+                    <span class="text-4xl sm:text-5xl font-black text-white">{{ total_ml }}</span>
+                    <span class="text-lg text-sky-200">/ {{ goal_ml }} ml</span>
+                </div>
+                <p class="text-xs text-sky-100 mt-1">
+                    {% if remaining_ml == 0 %}
+                        🎉 Goal reached for today! Outstanding work staying hydrated.
+                    {% else %}
+                        {{ remaining_ml }} ml remaining to reach your daily coaching target.
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="w-full md:w-64 bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/20">
+                <div class="flex justify-between items-center mb-2 text-xs font-bold text-sky-100">
+                    <span>Progress</span>
+                    <span>{{ pct_complete }}%</span>
+                </div>
+                <div class="w-full bg-white/20 rounded-full h-4 overflow-hidden">
+                    <div class="bg-white h-4 rounded-full transition-all duration-500" style="width: {{ pct_complete }}%;"></div>
+                </div>
+                <div class="mt-3 flex justify-between text-[11px] text-sky-200">
+                    <span>{{ (total_ml / 250) | round(1) }} glasses</span>
+                    <span>Target: {{ (goal_ml / 250) | round }} glasses</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Add & Custom Logging Form -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Quick Add Section -->
+        <div class="md:col-span-1 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+            <h3 class="font-bold text-gray-900 text-base flex items-center">
+                <span class="text-lg mr-2">⚡</span> Quick Add Buttons
+            </h3>
+            <p class="text-xs text-gray-500">Tap to instantly record common intake volumes:</p>
+
+            <div class="grid grid-cols-2 gap-3 pt-2">
+                <form action="{{ url_for('trackers.water', date=target_date.strftime('%Y-%m-%d')) }}" method="POST">
+                    <input type="hidden" name="action" value="add_intake">
+                    <input type="hidden" name="amount" value="250">
+                    <input type="hidden" name="unit" value="ml">
+                    <button type="submit" class="w-full p-3 bg-sky-50 hover:bg-sky-100 border border-sky-100 rounded-2xl text-center text-xs font-bold text-sky-900 transition">
+                        <span class="block text-lg mb-1">🥛</span>
+                        +250 ml<br><span class="text-[10px] text-sky-600 font-normal">1 Glass</span>
+                    </button>
+                </form>
+
+                <form action="{{ url_for('trackers.water', date=target_date.strftime('%Y-%m-%d')) }}" method="POST">
+                    <input type="hidden" name="action" value="add_intake">
+                    <input type="hidden" name="amount" value="500">
+                    <input type="hidden" name="unit" value="ml">
+                    <button type="submit" class="w-full p-3 bg-sky-50 hover:bg-sky-100 border border-sky-100 rounded-2xl text-center text-xs font-bold text-sky-900 transition">
+                        <span class="block text-lg mb-1">🍶</span>
+                        +500 ml<br><span class="text-[10px] text-sky-600 font-normal">Standard Bottle</span>
+                    </button>
+                </form>
+
+                <form action="{{ url_for('trackers.water', date=target_date.strftime('%Y-%m-%d')) }}" method="POST">
+                    <input type="hidden" name="action" value="add_intake">
+                    <input type="hidden" name="amount" value="750">
+                    <input type="hidden" name="unit" value="ml">
+                    <button type="submit" class="w-full p-3 bg-sky-50 hover:bg-sky-100 border border-sky-100 rounded-2xl text-center text-xs font-bold text-sky-900 transition">
+                        <span class="block text-lg mb-1">🧊</span>
+                        +750 ml<br><span class="text-[10px] text-sky-600 font-normal">Large Flask</span>
+                    </button>
+                </form>
+
+                <form action="{{ url_for('trackers.water', date=target_date.strftime('%Y-%m-%d')) }}" method="POST">
+                    <input type="hidden" name="action" value="add_intake">
+                    <input type="hidden" name="amount" value="1">
+                    <input type="hidden" name="unit" value="l">
+                    <button type="submit" class="w-full p-3 bg-sky-50 hover:bg-sky-100 border border-sky-100 rounded-2xl text-center text-xs font-bold text-sky-900 transition">
+                        <span class="block text-lg mb-1">🚰</span>
+                        +1 Liter<br><span class="text-[10px] text-sky-600 font-normal">1000 ml</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Custom Intake & Goal Setting -->
+        <div class="md:col-span-2 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
+            <!-- Custom Add Form -->
+            <div>
+                <h3 class="font-bold text-gray-900 text-base mb-3 flex items-center">
+                    <span class="text-lg mr-2">➕</span> Custom Intake Entry
+                </h3>
+                <form action="{{ url_for('trackers.water', date=target_date.strftime('%Y-%m-%d')) }}" method="POST" class="space-y-3">
+                    <input type="hidden" name="action" value="add_intake">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div class="sm:col-span-2 flex space-x-2">
+                            <input type="number" step="any" min="1" name="amount" required placeholder="Amount" class="flex-1 px-3 py-2 rounded-xl border border-gray-300 text-sm">
+                            <select name="unit" class="w-28 px-3 py-2 rounded-xl border border-gray-300 text-sm bg-gray-50">
+                                <option value="ml" selected>Milliliters (ml)</option>
+                                <option value="l">Liters (L)</option>
+                                <option value="glass">Glasses</option>
+                            </select>
+                        </div>
+                        <input type="text" name="notes" placeholder="Notes (e.g. Infused lemon)" class="px-3 py-2 rounded-xl border border-gray-300 text-sm">
+                    </div>
+                    <button type="submit" class="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl text-xs transition shadow-sm">
+                        Record Custom Water Intake
+                    </button>
+                </form>
+            </div>
+
+            <!-- Goal Config Form -->
+            <div class="pt-4 border-t border-gray-100">
+                <form action="{{ url_for('trackers.water', date=target_date.strftime('%Y-%m-%d')) }}" method="POST" class="flex items-center space-x-3">
+                    <input type="hidden" name="action" value="update_goal">
+                    <label class="text-xs font-bold text-gray-700 whitespace-nowrap">Daily Water Goal (ml):</label>
+                    <input type="number" min="500" step="100" name="daily_goal_ml" value="{{ goal_ml }}" class="w-28 px-3 py-1.5 rounded-xl border border-gray-300 text-xs font-bold">
+                    <button type="submit" class="px-3 py-1.5 bg-gray-800 hover:bg-black text-white text-xs font-bold rounded-xl transition">Update Goal</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Today's Intake Log Entries Table -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm">
+        <h3 class="font-bold text-gray-900 text-lg mb-4 pb-2 border-b border-gray-100 flex items-center">
+            <span class="text-lg mr-2">📋</span>
+            Logged Entries for {{ target_date | format_date }}
+        </h3>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 text-gray-700 uppercase text-[11px] tracking-wider border-b border-gray-200">
+                        <th class="p-3">Time Logged</th>
+                        <th class="p-3">Amount</th>
+                        <th class="p-3">Notes</th>
+                        <th class="p-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for entry in entries %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 font-medium text-gray-800">{{ entry.logged_at.strftime('%I:%M %p') }}</td>
+                            <td class="p-3 font-bold text-sky-900">+{{ entry.amount_ml }} ml</td>
+                            <td class="p-3 text-gray-500">{{ entry.notes or '—' }}</td>
+                            <td class="p-3 text-right">
+                                <form action="{{ url_for('trackers.water', date=target_date.strftime('%Y-%m-%d')) }}" method="POST" class="inline" onsubmit="return confirm('Delete this water entry?');">
+                                    <input type="hidden" name="action" value="delete_intake">
+                                    <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                                    <button type="submit" class="text-rose-600 hover:text-rose-800 font-bold text-xs">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="4" class="p-6 text-center text-gray-400">No water entries logged yet for this day. Use the quick-add buttons above!</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

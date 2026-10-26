@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Control Center - 90-Day Wellness{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <!-- Admin Header -->
+    <div class="bg-wellness-deep text-white rounded-3xl p-6 sm:p-8 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div>
+            <span class="px-2.5 py-0.5 text-xs font-bold bg-emerald-500/30 text-emerald-300 rounded-full uppercase tracking-wider">
+                Protected Administration Portal
+            </span>
+            <h1 class="text-3xl font-black text-white mt-2">Wellness Coaching Executive Dashboard</h1>
+            <p class="text-xs sm:text-sm text-emerald-200 mt-1">Real-time cohort tracking, compliance metrics, and participant management</p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ url_for('admin.participants') }}" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow transition">
+                View All Participants
+            </a>
+            <a href="{{ url_for('admin.support_inbox') }}" class="px-4 py-2 bg-white hover:bg-gray-100 text-gray-900 rounded-xl text-xs font-bold shadow transition relative">
+                Support Inbox
+                {% if pending_support > 0 %}
+                    <span class="ml-1 px-1.5 py-0.5 text-[10px] bg-rose-600 text-white rounded-full font-black">{{ pending_support }}</span>
+                {% endif %}
+            </a>
+            <a href="{{ url_for('admin.export_participants') }}" class="px-4 py-2 bg-emerald-900 hover:bg-black text-white rounded-xl text-xs font-bold border border-emerald-700 transition">
+                Export Roster CSV
+            </a>
+        </div>
+    </div>
+
+    <!-- KPI Metric Cards (Matches Section 14 Requirements) -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-500 block">Total Participants</span>
+            <span class="text-3xl font-black text-gray-900 mt-2 block">{{ total_participants }}</span>
+            <span class="text-[11px] text-emerald-700 mt-1 block">Active: {{ active_participants }}</span>
+        </div>
+
+        <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-500 block">Incomplete Today</span>
+            <span class="text-3xl font-black text-amber-600 mt-2 block">{{ incomplete_today_count }}</span>
+            <span class="text-[11px] text-gray-500 mt-1 block">Need follow-up nudge</span>
+        </div>
+
+        <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-500 block">Pending Queries</span>
+            <span class="text-3xl font-black {% if pending_support > 0 %}text-rose-600{% else %}text-emerald-700{% endif %} mt-2 block">
+                {{ pending_support }}
+            </span>
+            <span class="text-[11px] text-gray-500 mt-1 block">Open coach questions</span>
+        </div>
+
+        <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-500 block">Today's Date</span>
+            <span class="text-xl font-black text-gray-900 mt-2 block">{{ today | format_date }}</span>
+            <span class="text-[11px] text-emerald-700 mt-1 block">Active Program Cycle</span>
+        </div>
+    </div>
+
+    <!-- Cohort Breakdown by Program Day Bracket -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-4">
+        <h3 class="font-bold text-gray-900 text-lg pb-2 border-b border-gray-100 flex items-center">
+            <span class="text-xl mr-2">📈</span>
+            Participant Distribution by Program Day
+        </h3>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {% for bracket, count in day_brackets.items() %}
+                <div class="p-4 rounded-2xl bg-gray-50 border border-gray-200 text-center">
+                    <span class="text-xs font-bold uppercase text-gray-500 block">{{ bracket }}</span>
+                    <span class="text-2xl font-black text-emerald-900 mt-1 block">{{ count }}</span>
+                    <span class="text-[11px] text-gray-400">participants</span>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Recent Registrations & Daily Health Monitoring Table -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-4">
+        <div class="flex justify-between items-center pb-2 border-b border-gray-100">
+            <h3 class="font-bold text-gray-900 text-lg flex items-center">
+                <span class="text-xl mr-2">👥</span>
+                Recent Participant Activity & Compliance
+            </h3>
+            <a href="{{ url_for('admin.participants') }}" class="text-xs font-bold text-emerald-700 hover:underline">
+                View All &rarr;
+            </a>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 text-gray-700 uppercase text-[11px] tracking-wider border-b border-gray-200">
+                        <th class="p-3">Participant</th>
+                        <th class="p-3">Assigned Coach</th>
+                        <th class="p-3">Start Date</th>
+                        <th class="p-3">Program Day</th>
+                        <th class="p-3">Today's Entry</th>
+                        <th class="p-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for item in participants_summary[:10] %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3">
+                                <span class="font-bold text-gray-900 block">{{ item.user.full_name }}</span>
+                                <span class="text-[11px] text-gray-500">{{ item.user.email }}</span>
+                            </td>
+                            <td class="p-3 font-semibold text-emerald-800">{{ item.profile.coach_name or 'Unassigned' }}</td>
+                            <td class="p-3 text-gray-600">{{ item.profile.start_date | format_date }}</td>
+                            <td class="p-3">
+                                <span class="px-2 py-0.5 rounded font-bold {% if item.program_day > 90 %}bg-purple-100 text-purple-800{% else %}bg-emerald-100 text-emerald-800{% endif %}">
+                                    Day {{ item.program_day }}
+                                </span>
+                            </td>
+                            <td class="p-3">
+                                {% if item.has_today_entry %}
+                                    <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800">✓ Logged ({{ item.meals_today }} meals)</span>
+                                {% else %}
+                                    <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3 text-right space-x-2">
+                                <a href="{{ url_for('admin.participant_detail', user_id=item.user.id) }}" class="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold transition">
+                                    Review Records
+                                </a>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="p-6 text-center text-gray-400">No participants registered yet.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Support Inbox - 90-Day Wellness Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+            <div class="flex items-center space-x-2">
+                <a href="{{ url_for('admin.dashboard') }}" class="text-xs font-semibold text-emerald-700 hover:underline">&larr; Back to Dashboard</a>
+                <span class="text-gray-300">•</span>
+                <span class="text-xs font-bold text-gray-500 uppercase">Support Queue</span>
+            </div>
+            <h1 class="text-3xl font-extrabold text-wellness-deep mt-1">Participant Support Inbox</h1>
+            <p class="text-xs text-gray-500">Respond to participant questions, resolve inquiries, and manage coaching correspondence</p>
+        </div>
+
+        <!-- Filter Status Tabs -->
+        <div class="flex gap-2 bg-gray-100 p-1.5 rounded-2xl">
+            <a href="{{ url_for('admin.support_inbox', status='all') }}" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {% if status_filter == 'all' %}bg-white text-gray-900 shadow-sm{% else %}text-gray-600 hover:text-gray-900{% endif %}">
+                All ({{ conversations | length }})
+            </a>
+            <a href="{{ url_for('admin.support_inbox', status='Open') }}" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {% if status_filter == 'Open' %}bg-white text-sky-800 shadow-sm{% else %}text-gray-600 hover:text-gray-900{% endif %}">
+                Open ({{ open_count }})
+            </a>
+            <a href="{{ url_for('admin.support_inbox', status='Replied') }}" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {% if status_filter == 'Replied' %}bg-white text-emerald-800 shadow-sm{% else %}text-gray-600 hover:text-gray-900{% endif %}">
+                Replied ({{ replied_count }})
+            </a>
+            <a href="{{ url_for('admin.support_inbox', status='Resolved') }}" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {% if status_filter == 'Resolved' %}bg-white text-gray-800 shadow-sm{% else %}text-gray-600 hover:text-gray-900{% endif %}">
+                Resolved ({{ resolved_count }})
+            </a>
+        </div>
+    </div>
+
+    <!-- Conversations Table -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                    <tr class="bg-emerald-950 text-white uppercase text-[11px] tracking-wider">
+                        <th class="p-3">Participant</th>
+                        <th class="p-3">Subject / Issue</th>
+                        <th class="p-3">Status</th>
+                        <th class="p-3">Created</th>
+                        <th class="p-3">Last Active</th>
+                        <th class="p-3 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for c in conversations %}
+                        <tr class="hover:bg-gray-50 {% if c.status == 'Open' %}bg-sky-50/30{% endif %}">
+                            <td class="p-3">
+                                <span class="font-bold text-gray-900 block">{{ c.participant.full_name }}</span>
+                                <span class="text-[11px] text-gray-500">{{ c.participant.email }}</span>
+                            </td>
+                            <td class="p-3">
+                                <span class="font-bold text-gray-800 block text-sm">{{ c.subject }}</span>
+                                <span class="text-[11px] text-gray-500">Coach: {{ c.participant.profile.coach_name if c.participant.profile else 'Unassigned' }}</span>
+                            </td>
+                            <td class="p-3">
+                                <span class="px-2.5 py-1 rounded-full text-xs font-bold
+                                    {% if c.status == 'Open' %}bg-sky-100 text-sky-800
+                                    {% elif c.status == 'Replied' %}bg-emerald-100 text-emerald-800
+                                    {% else %}bg-gray-100 text-gray-600{% endif %}">
+                                    {{ c.status }}
+                                </span>
+                            </td>
+                            <td class="p-3 text-gray-500">{{ c.created_at.strftime('%b %d, %Y') }}</td>
+                            <td class="p-3 font-semibold text-gray-700">{{ c.last_message_at.strftime('%b %d • %I:%M %p') }}</td>
+                            <td class="p-3 text-right">
+                                <a href="{{ url_for('support.view', conversation_id=c.id) }}" class="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl transition text-xs">
+                                    Open & Reply
+                                </a>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="p-8 text-center text-gray-400">No support tickets found in this view.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

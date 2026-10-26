@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Ticket: {{ convo.subject }} - 90-Day Wellness{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <!-- Header -->
+    <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+            <div class="flex items-center space-x-2">
+                <a href="{% if current_user.is_admin %}{{ url_for('admin.support_inbox') }}{% else %}{{ url_for('support.index') }}{% endif %}" class="text-xs font-semibold text-emerald-700 hover:underline">&larr; Back to Inbox</a>
+                <span class="text-xs text-gray-400">•</span>
+                <span class="px-2.5 py-0.5 text-xs font-bold rounded-full 
+                    {% if convo.status == 'Replied' %}bg-emerald-100 text-emerald-800
+                    {% elif convo.status == 'Open' %}bg-sky-100 text-sky-800
+                    {% else %}bg-gray-100 text-gray-700{% endif %}">
+                    Status: {{ convo.status }}
+                </span>
+            </div>
+            <h1 class="text-2xl font-black text-gray-900 mt-2">{{ convo.subject }}</h1>
+            <p class="text-xs text-gray-500 mt-0.5">
+                Participant: <strong class="text-gray-800">{{ convo.participant.full_name }}</strong> ({{ convo.participant.email }})
+            </p>
+        </div>
+
+        {% if current_user.is_admin %}
+            <form action="{{ url_for('admin.update_support_status', convo_id=convo.id) }}" method="POST" class="flex items-center space-x-2">
+                <select name="status" class="px-3 py-1.5 rounded-xl border border-gray-300 text-xs font-bold">
+                    <option value="Open" {% if convo.status == 'Open' %}selected{% endif %}>Open</option>
+                    <option value="Replied" {% if convo.status == 'Replied' %}selected{% endif %}>Replied</option>
+                    <option value="Resolved" {% if convo.status == 'Resolved' %}selected{% endif %}>Resolved</option>
+                </select>
+                <button type="submit" class="px-3 py-1.5 bg-gray-800 hover:bg-black text-white text-xs font-bold rounded-xl transition">
+                    Update Status
+                </button>
+            </form>
+        {% endif %}
+    </div>
+
+    <!-- Messages Thread Container -->
+    <div class="space-y-4">
+        {% for msg in messages %}
+            <div class="p-6 rounded-3xl border {% if msg.is_admin_reply %}bg-emerald-50/70 border-emerald-200 ml-6 sm:ml-12{% else %}bg-white border-gray-200 mr-6 sm:mr-12{% endif %} shadow-sm space-y-2">
+                <div class="flex justify-between items-center text-xs">
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold {% if msg.is_admin_reply %}text-emerald-900{% else %}text-gray-900{% endif %}">
+                            {{ msg.sender.full_name }}
+                        </span>
+                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-full {% if msg.is_admin_reply %}bg-emerald-200 text-emerald-900{% else %}bg-gray-100 text-gray-700{% endif %}">
+                            {{ 'Wellness Coach / Admin' if msg.is_admin_reply else 'Participant' }}
+                        </span>
+                    </div>
+                    <span class="text-gray-400">{{ msg.created_at.strftime('%b %d, %Y • %I:%M %p') }}</span>
+                </div>
+                <div class="text-sm text-gray-800 whitespace-pre-line leading-relaxed">
+                    {{ msg.message }}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Reply Form Box -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-4">
+        <h3 class="font-bold text-gray-900 text-base flex items-center">
+            <span class="text-lg mr-2">💬</span> Send a Follow-Up Message
+        </h3>
+
+        <form action="{{ url_for('support.view', conversation_id=convo.id) }}" method="POST" class="space-y-4">
+            <textarea name="message" rows="3" required placeholder="Type your response here..." class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 text-sm"></textarea>
+
+            <button type="submit" class="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-md transition">
+                Send Reply
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

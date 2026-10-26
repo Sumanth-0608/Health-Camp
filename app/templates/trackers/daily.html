@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Daily Tasks - Day {{ program_day }} - 90-Day Wellness Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <!-- Day & Date Navigator -->
+    <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div class="flex items-center space-x-4">
+            <a href="{{ url_for('trackers.daily', date=prev_date.strftime('%Y-%m-%d')) }}" class="p-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-600 transition">
+                &larr; Prev Day
+            </a>
+            <div class="text-center sm:text-left">
+                <span class="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full">
+                    Day {{ program_day }} of 90
+                </span>
+                <h1 class="text-2xl font-black text-wellness-deep mt-1">{{ target_date | format_date }}</h1>
+            </div>
+            <a href="{{ url_for('trackers.daily', date=next_date.strftime('%Y-%m-%d')) }}" class="p-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-600 transition">
+                Next Day &rarr;
+            </a>
+        </div>
+
+        <!-- Jump to Date picker -->
+        <form method="GET" action="{{ url_for('trackers.daily') }}" class="flex items-center space-x-2">
+            <input type="date" name="date" value="{{ target_date.strftime('%Y-%m-%d') }}" class="px-3 py-1.5 rounded-xl border border-gray-300 text-xs">
+            <button type="submit" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition">
+                Go to Date
+            </button>
+            <a href="{{ url_for('trackers.daily') }}" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">
+                Today
+            </a>
+        </form>
+    </div>
+
+    <!-- Daily Tasks Hub Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- 1. Food Summary for this day -->
+        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+            <div class="flex justify-between items-center pb-3 border-b border-gray-100">
+                <div class="flex items-center space-x-2">
+                    <span class="text-xl">🥗</span>
+                    <h2 class="font-bold text-gray-900">Food & Craving Logging</h2>
+                </div>
+                <a href="{{ url_for('trackers.food', date=target_date.strftime('%Y-%m-%d')) }}" class="text-xs font-bold text-emerald-700 hover:underline">
+                    Edit Meals &rarr;
+                </a>
+            </div>
+
+            <div class="space-y-2">
+                {% for slot_key, slot_name in meal_slots %}
+                    {% set m = meals_by_slot.get(slot_key) %}
+                    <div class="p-3 rounded-xl border {% if m and m.food_description %}bg-emerald-50/50 border-emerald-100{% else %}bg-gray-50 border-gray-100 text-gray-400{% endif %} flex justify-between items-center text-xs">
+                        <div>
+                            <span class="font-bold text-gray-800">{{ slot_name }}</span>
+                            <p class="text-gray-600 mt-0.5">
+                                {% if m and m.food_description %}
+                                    {{ m.food_description }}
+                                {% else %}
+                                    <em class="text-gray-400">Not recorded yet</em>
+                                {% endif %}
+                            </p>
+                        </div>
+                        {% if m and m.photo_path %}
+                            <span class="px-2 py-0.5 bg-emerald-200 text-emerald-800 text-[10px] font-bold rounded">Photo Attached</span>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            {% if daily_log and daily_log.craving_notes %}
+                <div class="p-3 bg-amber-50 rounded-xl border border-amber-100 text-xs">
+                    <span class="font-bold text-amber-900 block">Craving Reflection:</span>
+                    <p class="text-amber-800 mt-0.5">{{ daily_log.craving_notes }}</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- 2. Water & Movement Summary for this day -->
+        <div class="space-y-6">
+            <!-- Water Card -->
+            <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                <div class="flex justify-between items-center pb-3 border-b border-gray-100">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xl">💧</span>
+                        <h2 class="font-bold text-gray-900">Hydration (Day {{ program_day }})</h2>
+                    </div>
+                    <a href="{{ url_for('trackers.water', date=target_date.strftime('%Y-%m-%d')) }}" class="text-xs font-bold text-emerald-700 hover:underline">
+                        Log Water &rarr;
+                    </a>
+                </div>
+                <div class="flex justify-between items-center">
+                    <div>
+                        <span class="text-2xl font-black text-gray-900">{{ water_total_ml }} ml</span>
+                        <span class="text-xs text-gray-500"> / {{ water_goal_ml }} ml goal</span>
+                    </div>
+                    <span class="px-2.5 py-1 text-xs font-bold rounded-full {% if water_total_ml >= water_goal_ml %}bg-emerald-100 text-emerald-800{% else %}bg-sky-100 text-sky-800{% endif %}">
+                        {{ ((water_total_ml / water_goal_ml * 100) if water_goal_ml else 0) | round }}% Complete
+                    </span>
+                </div>
+            </div>
+
+            <!-- Movement Card -->
+            <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                <div class="flex justify-between items-center pb-3 border-b border-gray-100">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xl">👟</span>
+                        <h2 class="font-bold text-gray-900">Movement Activity</h2>
+                    </div>
+                    <a href="{{ url_for('trackers.movement', date=target_date.strftime('%Y-%m-%d')) }}" class="text-xs font-bold text-emerald-700 hover:underline">
+                        Record Activity &rarr;
+                    </a>
+                </div>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="p-3 bg-gray-50 rounded-xl">
+                        <span class="text-gray-500 block">Steps</span>
+                        <span class="text-lg font-bold text-gray-900">
+                            {% if movement and movement.steps is not none %}{{ movement.steps }}{% else %}—{% endif %}
+                        </span>
+                    </div>
+                    <div class="p-3 bg-gray-50 rounded-xl">
+                        <span class="text-gray-500 block">Total Active Mins</span>
+                        <span class="text-lg font-bold text-gray-900">
+                            {% if movement and movement.total_active_mins is not none %}{{ movement.total_active_mins }}m{% else %}—{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Habit Steps Card -->
+            <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-4">
+                <div class="flex justify-between items-center pb-3 border-b border-gray-100">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xl">✅</span>
+                        <h2 class="font-bold text-gray-900">Week {{ week_num }} Action Steps</h2>
+                    </div>
+                    <a href="{{ url_for('trackers.habits', week=week_num) }}" class="text-xs font-bold text-emerald-700 hover:underline">
+                        Habit Tracker &rarr;
+                    </a>
+                </div>
+                <div class="space-y-2 text-xs">
+                    <div class="p-2.5 bg-gray-50 rounded-xl flex items-center justify-between">
+                        <span class="text-gray-800 font-medium">1. {{ habit_week.step_1 if habit_week else 'Action Step 1' }}</span>
+                    </div>
+                    <div class="p-2.5 bg-gray-50 rounded-xl flex items-center justify-between">
+                        <span class="text-gray-800 font-medium">2. {{ habit_week.step_2 if habit_week else 'Action Step 2' }}</span>
+                    </div>
+                    <div class="p-2.5 bg-gray-50 rounded-xl flex items-center justify-between">
+                        <span class="text-gray-800 font-medium">3. {{ habit_week.step_3 if habit_week else 'Action Step 3' }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

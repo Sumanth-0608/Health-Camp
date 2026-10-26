@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Habit Tracker - Week {{ selected_week }} - 90-Day Wellness{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <!-- Header with Workbook Guidance -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <div class="flex items-center space-x-2">
+                <span class="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full">Week {{ selected_week }} of 12</span>
+                <span class="text-xs text-gray-500">•</span>
+                <span class="text-xs font-semibold text-gray-600">{{ habit_week.date_range_label or 'Active Week' }}</span>
+            </div>
+            <h1 class="text-3xl font-extrabold text-wellness-deep mt-1">Weekly Action Steps (Habit Tracker)</h1>
+            <p class="text-xs sm:text-sm text-emerald-800 font-medium mt-1">
+                "Your coach gives you three small steps each week. Write them here and tick Y or N every day."
+            </p>
+        </div>
+
+        <!-- Week Selector Tabs -->
+        <div class="flex flex-wrap gap-1.5 max-w-md">
+            {% for w in range(1, 13) %}
+                <a href="{{ url_for('trackers.habits', week=w) }}" class="px-3 py-1.5 text-xs font-bold rounded-xl transition {% if w == selected_week %}bg-emerald-700 text-white shadow-sm{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+                    Wk {{ w }}
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Week Score Card (Replicates Excel Week Score Row) -->
+    <div class="bg-gradient-to-r from-emerald-900 to-teal-900 rounded-3xl p-6 sm:p-8 text-white shadow-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+        <div>
+            <span class="text-xs uppercase font-bold tracking-widest text-emerald-300">WEEK {{ selected_week }} SCORE</span>
+            <div class="flex items-baseline space-x-3 mt-1">
+                <span class="text-4xl sm:text-5xl font-black text-white">{{ week_score_pct }}%</span>
+                <span class="text-sm text-emerald-200">({{ total_days_done }} of 21 days completed)</span>
+            </div>
+            <p class="text-xs text-emerald-200 mt-2 italic">
+                "Anything above 70% in a week is a good week. Nobody scores 100%, and nobody needs to."
+            </p>
+        </div>
+
+        <div class="px-5 py-3 rounded-2xl bg-white/10 backdrop-blur border border-white/20 text-center">
+            <span class="text-xs font-bold uppercase text-emerald-200 block">Weekly Target</span>
+            <span class="text-xl font-bold mt-0.5 block {% if week_score_pct >= 70 %}text-emerald-300{% else %}text-amber-300{% endif %}">
+                {% if week_score_pct >= 70 %}✓ Good Week (>70%){% else %}In Progress{% endif %}
+            </span>
+        </div>
+    </div>
+
+    <!-- Habit Action Steps Checklist Table Form -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-6">
+        <div class="flex justify-between items-center pb-3 border-b border-gray-100">
+            <div>
+                <h2 class="text-lg font-bold text-gray-900">WEEK {{ selected_week }} • Dates: {{ habit_week.date_range_label or 'Current Week' }}</h2>
+                <p class="text-xs text-gray-500">Check off each habit completed on Monday through Sunday</p>
+            </div>
+            <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full">
+                Coach Managed Action Steps
+            </span>
+        </div>
+
+        <form action="{{ url_for('trackers.habits', week=selected_week) }}" method="POST">
+            <input type="hidden" name="action" value="save_ticks">
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="bg-emerald-950 text-white uppercase text-[11px] tracking-wider">
+                            <th class="p-3.5 w-1/3">My Action Step This Week</th>
+                            <th class="p-3 text-center">Mon</th>
+                            <th class="p-3 text-center">Tue</th>
+                            <th class="p-3 text-center">Wed</th>
+                            <th class="p-3 text-center">Thu</th>
+                            <th class="p-3 text-center">Fri</th>
+                            <th class="p-3 text-center">Sat</th>
+                            <th class="p-3 text-center">Sun</th>
+                            <th class="p-3 text-center bg-emerald-900">Days Done</th>
+                            <th class="p-3 text-center bg-emerald-800">% Done</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        {% for hd in habit_days %}
+                            {% set step_desc = habit_week['step_' ~ hd.step_index] %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="p-4 font-semibold text-gray-900 text-sm">
+                                    <span class="inline-block w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-xs text-center leading-5 font-bold mr-2">{{ hd.step_index }}</span>
+                                    {{ step_desc }}
+                                </td>
+                                <!-- Days Mon - Sun Checkboxes -->
+                                <td class="p-3 text-center">
+                                    <input type="checkbox" name="step_{{ hd.step_index }}_mon" {% if hd.mon %}checked{% endif %} class="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer">
+                                </td>
+                                <td class="p-3 text-center">
+                                    <input type="checkbox" name="step_{{ hd.step_index }}_tue" {% if hd.tue %}checked{% endif %} class="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer">
+                                </td>
+                                <td class="p-3 text-center">
+                                    <input type="checkbox" name="step_{{ hd.step_index }}_wed" {% if hd.wed %}checked{% endif %} class="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer">
+                                </td>
+                                <td class="p-3 text-center">
+                                    <input type="checkbox" name="step_{{ hd.step_index }}_thu" {% if hd.thu %}checked{% endif %} class="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer">
+                                </td>
+                                <td class="p-3 text-center">
+                                    <input type="checkbox" name="step_{{ hd.step_index }}_fri" {% if hd.fri %}checked{% endif %} class="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer">
+                                </td>
+                                <td class="p-3 text-center">
+                                    <input type="checkbox" name="step_{{ hd.step_index }}_sat" {% if hd.sat %}checked{% endif %} class="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer">
+                                </td>
+                                <td class="p-3 text-center">
+                                    <input type="checkbox" name="step_{{ hd.step_index }}_sun" {% if hd.sun %}checked{% endif %} class="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer">
+                                </td>
+                                <td class="p-3 text-center font-bold text-emerald-900 bg-emerald-50/50">
+                                    {{ hd.days_done }} / 7
+                                </td>
+                                <td class="p-3 text-center font-black text-emerald-950 bg-emerald-100/60">
+                                    {{ hd.percent_done }}%
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        <!-- Totals Row -->
+                        <tr class="bg-gray-100 font-bold text-gray-900 border-t-2 border-gray-300">
+                            <td class="p-4 uppercase text-xs tracking-wider">Week Score Formula</td>
+                            <td colspan="7" class="p-4 text-center text-xs text-gray-500 italic">Total days checked / 21 maximum</td>
+                            <td class="p-4 text-center text-emerald-900 bg-emerald-100">{{ total_days_done }}</td>
+                            <td class="p-4 text-center text-emerald-950 bg-emerald-200 text-sm font-black">{{ week_score_pct }}%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pt-4 flex justify-end">
+                <button type="submit" class="px-8 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-sm shadow-md transition">
+                    Save Week {{ selected_week }} Check-Ins
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- 12-Week Progress Snapshot Grid -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm">
+        <h3 class="font-bold text-gray-900 text-lg mb-4 pb-2 border-b border-gray-100">12-Week Habit Progress Roadmap</h3>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+            {% for s in all_weeks_summary %}
+                <a href="{{ url_for('trackers.habits', week=s.week) }}" class="p-3 rounded-2xl border text-center transition {% if s.week == selected_week %}border-emerald-600 bg-emerald-50/50 font-bold{% else %}border-gray-200 hover:border-emerald-300 bg-gray-50{% endif %}">
+                    <span class="text-[11px] text-gray-500 uppercase block">Week {{ s.week }}</span>
+                    <span class="text-lg font-black block mt-0.5 {% if s.pct >= 70 %}text-emerald-700{% else %}text-gray-800{% endif %}">
+                        {{ s.pct }}%
+                    </span>
+                    <span class="text-[10px] text-gray-400 block">{{ s.days_done }}/21 done</span>
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

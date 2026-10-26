@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Movement & Steps Tracker - Day {{ program_day }} - 90-Day Wellness{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <!-- Header with Workbook Guidance -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <div class="flex items-center space-x-2">
+                <span class="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full">Day {{ program_day }} of 90</span>
+                <span class="text-xs text-gray-500">•</span>
+                <span class="text-xs font-semibold text-gray-600">{{ target_date | format_date }}</span>
+            </div>
+            <h1 class="text-3xl font-extrabold text-wellness-deep mt-1">Movement & Steps Tracker</h1>
+            <p class="text-xs sm:text-sm text-emerald-800 font-medium mt-1">
+                "Your one hour of exercise, plus everything else you moved for. Total minutes add up on their own."
+            </p>
+        </div>
+
+        <!-- Date Stepper -->
+        <div class="flex items-center space-x-2">
+            <a href="{{ url_for('trackers.movement', date=prev_date.strftime('%Y-%m-%d')) }}" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">&larr; Prev Day</a>
+            <input type="date" value="{{ target_date.strftime('%Y-%m-%d') }}" onchange="window.location.href='{{ url_for('trackers.movement') }}?date=' + this.value" class="px-3 py-1.5 rounded-xl border border-gray-300 text-xs">
+            <a href="{{ url_for('trackers.movement', date=next_date.strftime('%Y-%m-%d')) }}" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">Next Day &rarr;</a>
+        </div>
+    </div>
+
+    <!-- Excel Averages Header Card (Matches Rows 5-8 of Workbook) -->
+    <div class="bg-emerald-950 text-white rounded-3xl p-6 sm:p-8 shadow-md">
+        <div class="mb-4">
+            <span class="text-xs uppercase font-bold tracking-widest text-emerald-300">Workbook Formula Summary</span>
+            <h2 class="text-xl font-bold text-white mt-0.5">Your Averages So Far</h2>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10">
+                <span class="text-xs text-emerald-300 font-bold block uppercase">Days Filled</span>
+                <span class="text-3xl font-black text-white mt-1 block">{{ days_filled }}</span>
+                <span class="text-[11px] text-emerald-200">Days with recorded data</span>
+            </div>
+            <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10">
+                <span class="text-xs text-emerald-300 font-bold block uppercase">Average Steps a Day</span>
+                <span class="text-3xl font-black text-white mt-1 block">{{ avg_steps if avg_steps else '—' }}</span>
+                <span class="text-[11px] text-emerald-200">Excludes blank days</span>
+            </div>
+            <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10">
+                <span class="text-xs text-emerald-300 font-bold block uppercase">Average Active Minutes / Day</span>
+                <span class="text-3xl font-black text-white mt-1 block">{{ avg_active_mins if avg_active_mins else '—' }}m</span>
+                <span class="text-[11px] text-emerald-200">Morning + Evening + Other</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Movement Input Form for target day -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm">
+        <h2 class="text-lg font-bold text-gray-900 mb-6 pb-2 border-b border-gray-100 flex items-center">
+            <span class="text-xl mr-2">🏃</span>
+            Log Activity for Day {{ program_day }} ({{ target_date | format_date }})
+        </h2>
+
+        <form action="{{ url_for('trackers.movement', date=target_date.strftime('%Y-%m-%d')) }}" method="POST" class="space-y-6">
+            <!-- Daily Steps -->
+            <div class="max-w-xs">
+                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Total Daily Steps</label>
+                <input type="number" min="0" step="1" name="steps" value="{{ entry.steps if entry and entry.steps is not none else '' }}" placeholder="e.g. 8500" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 text-sm font-bold">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                <!-- Morning Activity -->
+                <div class="p-5 rounded-2xl bg-gray-50 border border-gray-200 space-y-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-emerald-800 block">Morning Activity</span>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-gray-600 mb-1">What I Did</label>
+                        <input type="text" name="morning_activity" value="{{ entry.morning_activity if entry else '' }}" placeholder="e.g. Brisk walk & light stretches" class="w-full px-3 py-2 rounded-xl border border-gray-300 text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-gray-600 mb-1">Duration (Minutes)</label>
+                        <input type="number" min="0" name="morning_mins" value="{{ entry.morning_mins if entry and entry.morning_mins is not none else '' }}" placeholder="30" class="w-full px-3 py-2 rounded-xl border border-gray-300 text-xs font-bold">
+                    </div>
+                </div>
+
+                <!-- Evening Activity -->
+                <div class="p-5 rounded-2xl bg-gray-50 border border-gray-200 space-y-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-emerald-800 block">Evening Activity</span>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-gray-600 mb-1">What I Did</label>
+                        <input type="text" name="evening_activity" value="{{ entry.evening_activity if entry else '' }}" placeholder="e.g. Bodyweight circuit or yoga" class="w-full px-3 py-2 rounded-xl border border-gray-300 text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-gray-600 mb-1">Duration (Minutes)</label>
+                        <input type="number" min="0" name="evening_mins" value="{{ entry.evening_mins if entry and entry.evening_mins is not none else '' }}" placeholder="20" class="w-full px-3 py-2 rounded-xl border border-gray-300 text-xs font-bold">
+                    </div>
+                </div>
+
+                <!-- Other Movement -->
+                <div class="p-5 rounded-2xl bg-gray-50 border border-gray-200 space-y-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-emerald-800 block">Other Movement</span>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-gray-600 mb-1">Activity (Walk after meals, stairs, housework)</label>
+                        <input type="text" name="other_activity" value="{{ entry.other_activity if entry else '' }}" placeholder="e.g. 3 flights of stairs, gardening" class="w-full px-3 py-2 rounded-xl border border-gray-300 text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-gray-600 mb-1">Duration (Minutes)</label>
+                        <input type="number" min="0" name="other_mins" value="{{ entry.other_mins if entry and entry.other_mins is not none else '' }}" placeholder="15" class="w-full px-3 py-2 rounded-xl border border-gray-300 text-xs font-bold">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Active Mins Banner -->
+            <div class="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 flex justify-between items-center">
+                <div>
+                    <span class="text-xs font-bold text-emerald-900 block">Calculated Total Active Minutes:</span>
+                    <span class="text-xs text-emerald-700">Automatically sums Morning, Evening, and Other activity.</span>
+                </div>
+                <div class="text-2xl font-black text-emerald-950">
+                    {% if entry and entry.total_active_mins is not none %}
+                        {{ entry.total_active_mins }} minutes
+                    {% else %}
+                        0 minutes
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- How I Felt After -->
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">How I Felt After</label>
+                <input type="text" name="how_i_felt" value="{{ entry.how_i_felt if entry else '' }}" placeholder="e.g. Energized, refreshed, slight muscle soreness" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 text-sm">
+            </div>
+
+            <div class="pt-2">
+                <button type="submit" class="px-8 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-sm shadow-md transition">
+                    Save Day {{ program_day }} Movement
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- 90-Day Movement History Table (Replicates Workbook Rows) -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm">
+        <h3 class="font-bold text-gray-900 text-lg mb-4 pb-2 border-b border-gray-100 flex items-center">
+            <span class="text-xl mr-2">📊</span>
+            90-Day Movement Log
+        </h3>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                    <tr class="bg-emerald-900 text-white uppercase text-[11px] tracking-wider">
+                        <th class="p-3">Day</th>
+                        <th class="p-3">Date</th>
+                        <th class="p-3">Steps</th>
+                        <th class="p-3">Morning Mins</th>
+                        <th class="p-3">Evening Mins</th>
+                        <th class="p-3">Other Mins</th>
+                        <th class="p-3 bg-emerald-800">Total Active Mins</th>
+                        <th class="p-3">How I Felt After</th>
+                        <th class="p-3 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for rec in history_records %}
+                        <tr class="hover:bg-gray-50 {% if rec.date == target_date %}bg-emerald-50/60 font-bold{% endif %}">
+                            <td class="p-3">Day {{ rec.program_day }}</td>
+                            <td class="p-3">{{ rec.date | format_date }}</td>
+                            <td class="p-3 font-semibold">{{ rec.steps if rec.steps is not none else '—' }}</td>
+                            <td class="p-3">{{ rec.morning_mins if rec.morning_mins is not none else '—' }}</td>
+                            <td class="p-3">{{ rec.evening_mins if rec.evening_mins is not none else '—' }}</td>
+                            <td class="p-3">{{ rec.other_mins if rec.other_mins is not none else '—' }}</td>
+                            <td class="p-3 font-bold text-emerald-900 bg-emerald-50/40">
+                                {{ rec.total_active_mins if rec.total_active_mins is not none else '—' }}
+                            </td>
+                            <td class="p-3 text-gray-600 max-w-xs truncate">{{ rec.how_i_felt or '—' }}</td>
+                            <td class="p-3 text-right">
+                                <a href="{{ url_for('trackers.movement', date=rec.date.strftime('%Y-%m-%d')) }}" class="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded font-bold transition">
+                                    Edit
+                                </a>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="9" class="p-6 text-center text-gray-400">No movement entries saved yet. Log today's movement above!</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

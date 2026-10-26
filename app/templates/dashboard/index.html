@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - 90-Day Wellness Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <!-- Participant Header & Program Counter -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <div class="flex items-center space-x-5">
+            <div class="relative">
+                {% if user.profile_photo %}
+                    <img src="{{ url_for('uploads.serve_file', folder='profiles', filename=user.profile_photo.split('/')[-1]) }}" alt="{{ user.full_name }}" class="w-20 h-20 rounded-2xl object-cover border-2 border-emerald-600 shadow-md">
+                {% else %}
+                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-tr from-emerald-800 to-teal-600 text-white flex items-center justify-center font-bold text-3xl shadow-md">
+                        {{ user.full_name[:1] | upper }}
+                    </div>
+                {% endif %}
+                <span class="absolute -bottom-2 -right-2 px-2 py-0.5 text-xs font-bold bg-emerald-600 text-white rounded-md shadow-sm">
+                    Day {{ program_day }}
+                </span>
+            </div>
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 leading-tight">
+                    Hello, {{ user.full_name }}!
+                </h1>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs sm:text-sm text-gray-500">
+                    <span class="flex items-center">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span>
+                        Coach: <strong class="text-gray-800 ml-1">{{ profile.coach_name or 'Requesting Coach' }}</strong>
+                    </span>
+                    <span>•</span>
+                    <span>Start: <strong class="text-gray-800">{{ profile.start_date | format_date }}</strong></span>
+                    <span>•</span>
+                    <span>Session: <strong class="text-gray-800">{{ profile.session_day_time }}</strong></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 90-Day Progress Gauge -->
+        <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 sm:p-5 w-full lg:w-80 flex flex-col justify-between">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-emerald-900">Program Progress</span>
+                <span class="text-xs font-bold text-emerald-700">{{ days_completed }}/90 Days Completed</span>
+            </div>
+            <div class="w-full bg-emerald-200/60 rounded-full h-3 overflow-hidden">
+                <div class="bg-emerald-600 h-3 rounded-full transition-all duration-500" style="width: {{ (days_completed / 90 * 100) | round }}%;"></div>
+            </div>
+            <div class="flex justify-between items-center mt-3 text-xs text-emerald-900">
+                <span>{{ days_remaining }} days remaining</span>
+                <span class="font-bold">{{ (days_completed / 90 * 100) | round }}% Elapsed</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Today's Daily Completion Card -->
+    <div class="bg-gradient-to-r from-emerald-900 to-teal-800 rounded-3xl p-6 sm:p-8 text-white shadow-lg">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+                <span class="text-xs uppercase font-bold tracking-widest text-emerald-300">Daily Checklist</span>
+                <h2 class="text-2xl font-black mt-1">Today's Tracking (Day {{ program_day }})</h2>
+                <p class="text-xs sm:text-sm text-emerald-100 mt-1">{{ today | format_date }} • Update and log your daily wellness metrics</p>
+            </div>
+            <div class="flex items-center space-x-3 bg-white/10 backdrop-blur px-4 py-2.5 rounded-2xl border border-white/20">
+                <div class="text-right">
+                    <span class="text-xs text-emerald-200 block uppercase font-bold">Today's Score</span>
+                    <span class="text-xl font-extrabold text-white">{{ daily_completion_pct }}%</span>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-sm">
+                    {{ daily_completion_pct }}%
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {% for t in tasks %}
+                <a href="{{ t.link }}" class="bg-white/10 hover:bg-white/20 backdrop-blur p-4 rounded-2xl border border-white/15 transition flex flex-col justify-between block group">
+                    <div class="flex justify-between items-start">
+                        <span class="text-sm font-bold text-white group-hover:text-emerald-200 transition">{{ t.name }}</span>
+                        {% if t.done %}
+                            <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-400 text-emerald-950">✓ Done</span>
+                        {% else %}
+                            <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-white/20 text-white">{{ t.status }}</span>
+                        {% endif %}
+                    </div>
+                    <p class="text-xs text-emerald-200 mt-4">{{ t.details }}</p>
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Quick Tracker Pillars Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- 1. Water Intake Card -->
+        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xl">💧</span>
+                        <h3 class="font-bold text-gray-900">Hydration Progress</h3>
+                    </div>
+                    <a href="{{ url_for('trackers.water') }}" class="text-xs font-bold text-emerald-700 hover:underline">Log Intake &rarr;</a>
+                </div>
+                <div class="flex items-baseline space-x-2">
+                    <span class="text-3xl font-extrabold text-gray-900">{{ today_water_ml }}</span>
+                    <span class="text-sm text-gray-500">/ {{ daily_water_goal_ml }} ml</span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-3.5 mt-3 overflow-hidden">
+                    <div class="bg-sky-500 h-3.5 rounded-full transition-all duration-500" style="width: {{ water_percent }}%;"></div>
+                </div>
+                <div class="flex justify-between text-xs text-gray-500 mt-2 font-medium">
+                    <span>{{ water_percent }}% of Daily Goal</span>
+                    <span>{{ [daily_water_goal_ml - today_water_ml, 0] | max }} ml to go</span>
+                </div>
+            </div>
+            <div class="mt-6 pt-4 border-t border-gray-100 flex gap-2">
+                <form action="{{ url_for('trackers.water') }}" method="POST" class="flex-1">
+                    <input type="hidden" name="action" value="add_intake">
+                    <input type="hidden" name="amount" value="250">
+                    <input type="hidden" name="unit" value="ml">
+                    <button type="submit" class="w-full py-2 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-bold rounded-xl transition text-center">+250ml Glass</button>
+                </form>
+                <form action="{{ url_for('trackers.water') }}" method="POST" class="flex-1">
+                    <input type="hidden" name="action" value="add_intake">
+                    <input type="hidden" name="amount" value="500">
+                    <input type="hidden" name="unit" value="ml">
+                    <button type="submit" class="w-full py-2 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-bold rounded-xl transition text-center">+500ml Bottle</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 2. Movement Card -->
+        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xl">👟</span>
+                        <h3 class="font-bold text-gray-900">Movement & Steps</h3>
+                    </div>
+                    <a href="{{ url_for('trackers.movement') }}" class="text-xs font-bold text-emerald-700 hover:underline">Full Log &rarr;</a>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="p-3 bg-gray-50 rounded-2xl">
+                        <span class="text-xs text-gray-500 block uppercase font-bold">Today's Steps</span>
+                        <span class="text-2xl font-black text-gray-900">
+                            {% if today_movement and today_movement.steps is not none %}{{ today_movement.steps }}{% else %}—{% endif %}
+                        </span>
+                    </div>
+                    <div class="p-3 bg-gray-50 rounded-2xl">
+                        <span class="text-xs text-gray-500 block uppercase font-bold">Active Mins</span>
+                        <span class="text-2xl font-black text-gray-900">
+                            {% if today_movement and today_movement.total_active_mins is not none %}{{ today_movement.total_active_mins }}m{% else %}—{% endif %}
+                        </span>
+                    </div>
+                </div>
+                <div class="mt-4 text-xs text-gray-500 space-y-1">
+                    <div class="flex justify-between">
+                        <span>90-Day Avg Steps:</span>
+                        <strong class="text-gray-800">{% if avg_steps %}{{ avg_steps }}{% else %}No entries yet{% endif %}</strong>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>90-Day Avg Active Mins:</span>
+                        <strong class="text-gray-800">{% if avg_active_mins %}{{ avg_active_mins }} min/day{% else %}No entries yet{% endif %}</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 pt-4 border-t border-gray-100">
+                <a href="{{ url_for('trackers.movement') }}" class="block text-center py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl transition">
+                    Record Today's Activity
+                </a>
+            </div>
+        </div>
+
+        <!-- 3. Habits Card -->
+        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xl">✅</span>
+                        <h3 class="font-bold text-gray-900">Week {{ current_week_num }} Action Steps</h3>
+                    </div>
+                    <a href="{{ url_for('trackers.habits', week=current_week_num) }}" class="text-xs font-bold text-emerald-700 hover:underline">Check In &rarr;</a>
+                </div>
+                <div class="flex items-baseline space-x-2">
+                    <span class="text-3xl font-extrabold text-gray-900">{{ habit_week_pct }}%</span>
+                    <span class="text-xs text-gray-500 font-medium">Weekly Target: 70%+</span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-3.5 mt-3 overflow-hidden">
+                    <div class="h-3.5 rounded-full transition-all duration-500 {% if habit_week_pct >= 70 %}bg-emerald-600{% else %}bg-amber-500{% endif %}" style="width: {{ habit_week_pct }}%;"></div>
+                </div>
+                <p class="text-xs text-gray-500 mt-3 italic leading-snug">
+                    "Anything above 70% in a week is a good week. Nobody scores 100%, and nobody needs to."
+                </p>
+            </div>
+            <div class="mt-6 pt-4 border-t border-gray-100">
+                <a href="{{ url_for('trackers.habits', week=current_week_num) }}" class="block text-center py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl transition">
+                    Mark Habit Ticks (Y/N)
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Body Measurements & Weekly Score Summaries -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Measurement Summary & Chart -->
+        <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="font-bold text-gray-900 text-lg">Measurements Progress</h3>
+                    <p class="text-xs text-gray-500">Every 7 days: "Waist matters more than weight."</p>
+                </div>
+                <a href="{{ url_for('trackers.measurements') }}" class="text-xs font-bold text-emerald-700 hover:underline">View All Weeks &rarr;</a>
+            </div>
+
+            <!-- Metric Cards (Start vs Latest) -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                <div class="p-3 bg-gray-50 rounded-2xl">
+                    <span class="text-[11px] font-bold text-gray-500 uppercase block">Weight (kg)</span>
+                    <div class="flex items-baseline space-x-1 mt-1">
+                        <span class="text-xl font-black text-gray-900">
+                            {% if latest_measurement and latest_measurement.weight_kg is not none %}{{ latest_measurement.weight_kg }}{% else %}—{% endif %}
+                        </span>
+                        {% if changes.weight_kg is not none %}
+                            <span class="text-xs font-bold {% if changes.weight_kg <= 0 %}text-emerald-700{% else %}text-rose-600{% endif %}">
+                                ({{ '+' if changes.weight_kg > 0 else '' }}{{ changes.weight_kg }})
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-100">
+                    <span class="text-[11px] font-bold text-emerald-800 uppercase block">Waist (cm)</span>
+                    <div class="flex items-baseline space-x-1 mt-1">
+                        <span class="text-xl font-black text-emerald-950">
+                            {% if latest_measurement and latest_measurement.waist_cm is not none %}{{ latest_measurement.waist_cm }}{% else %}—{% endif %}
+                        </span>
+                        {% if changes.waist_cm is not none %}
+                            <span class="text-xs font-bold {% if changes.waist_cm <= 0 %}text-emerald-700{% else %}text-rose-600{% endif %}">
+                                ({{ '+' if changes.waist_cm > 0 else '' }}{{ changes.waist_cm }})
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="p-3 bg-gray-50 rounded-2xl">
+                    <span class="text-[11px] font-bold text-gray-500 uppercase block">Hips (cm)</span>
+                    <div class="flex items-baseline space-x-1 mt-1">
+                        <span class="text-xl font-black text-gray-900">
+                            {% if latest_measurement and latest_measurement.hips_cm is not none %}{{ latest_measurement.hips_cm }}{% else %}—{% endif %}
+                        </span>
+                        {% if changes.hips_cm is not none %}
+                            <span class="text-xs font-bold {% if changes.hips_cm <= 0 %}text-emerald-700{% else %}text-rose-600{% endif %}">
+                                ({{ '+' if changes.hips_cm > 0 else '' }}{{ changes.hips_cm }})
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart or Empty State -->
+            {% if chart_weights and chart_weights | length > 0 %}
+                <div class="relative h-60">
+                    <canvas id="measurementsChart"></canvas>
+                </div>
+            {% else %}
+                <div class="py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                    <p class="text-sm font-semibold text-gray-600">No measurement history recorded yet</p>
+                    <p class="text-xs text-gray-400 mt-1">Log your Day 1 baseline measurements to start tracking your physical progress.</p>
+                    <a href="{{ url_for('trackers.measurements') }}" class="mt-4 inline-block px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800 transition">Record Day 1 Measurements</a>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Weekly Score Summary & Chart -->
+        <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="font-bold text-gray-900 text-lg">Weekly Well-Being Score</h3>
+                    <p class="text-xs text-gray-500">Every Sunday: Energy, Sleep, Digestion, Mood, Cravings</p>
+                </div>
+                <a href="{{ url_for('trackers.weekly_scores') }}" class="text-xs font-bold text-emerald-700 hover:underline">Full History &rarr;</a>
+            </div>
+
+            {% if latest_score_obj and latest_score_obj.week_average is not none %}
+                <div class="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 mb-6 flex justify-between items-center">
+                    <div>
+                        <span class="text-xs font-bold text-emerald-800 uppercase block">Latest: Week {{ latest_score_obj.week_number }} Average</span>
+                        <p class="text-xs text-emerald-600 mt-0.5">Scale: 1 = worst ever, 10 = best imaginable</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-3xl font-black text-emerald-900">{{ latest_score_obj.week_average }}</span>
+                        <span class="text-xs text-emerald-700">/ 10</span>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if chart_score_averages and chart_score_averages | length > 0 %}
+                <div class="relative h-60">
+                    <canvas id="scoresChart"></canvas>
+                </div>
+            {% else %}
+                <div class="py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                    <p class="text-sm font-semibold text-gray-600">No weekly scores submitted yet</p>
+                    <p class="text-xs text-gray-400 mt-1">"This is usually where change shows up first." Submit your first Sunday review.</p>
+                    <a href="{{ url_for('trackers.weekly_scores') }}" class="mt-4 inline-block px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800 transition">Score This Week</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Measurements Progress Chart
+    {% if chart_weights and chart_weights | length > 0 %}
+    const mCtx = document.getElementById('measurementsChart').getContext('2d');
+    new Chart(mCtx, {
+        type: 'line',
+        data: {
+            labels: {{ chart_weeks | tojson }},
+            datasets: [
+                {
+                    label: 'Weight (kg)',
+                    data: {{ chart_weights | tojson }},
+                    borderColor: '#0f766e',
+                    backgroundColor: 'rgba(15, 118, 110, 0.1)',
+                    tension: 0.2,
+                    fill: false,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Waist (cm)',
+                    data: {{ chart_waists | tojson }},
+                    borderColor: '#15803d',
+                    backgroundColor: 'rgba(21, 128, 61, 0.1)',
+                    tension: 0.2,
+                    fill: false,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    title: { display: true, text: 'Weight (kg)' }
+                },
+                y1: {
+                    type: 'linear',
+                    position: 'right',
+                    title: { display: true, text: 'Waist (cm)' },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+    {% endif %}
+
+    // Weekly Score Trend Chart
+    {% if chart_score_averages and chart_score_averages | length > 0 %}
+    const sCtx = document.getElementById('scoresChart').getContext('2d');
+    new Chart(sCtx, {
+        type: 'line',
+        data: {
+            labels: {{ chart_score_weeks | tojson }},
+            datasets: [{
+                label: 'Week Average (out of 10)',
+                data: {{ chart_score_averages | tojson }},
+                borderColor: '#16a34a',
+                backgroundColor: 'rgba(22, 163, 74, 0.15)',
+                borderWidth: 3,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    min: 1,
+                    max: 10,
+                    title: { display: true, text: 'Score (1 to 10)' }
+                }
+            }
+        }
+    });
+    {% endif %}
+</script>
+{% endblock %}
