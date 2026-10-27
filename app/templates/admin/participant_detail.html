@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Review Participant: {{ participant.full_name }} - Admin Portal{% endblock %}
+{% block title %}Review Participant: {{ participant.full_name }} - Dr. Girija's NutriLife{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -59,7 +59,7 @@
                 <select name="coach_id" class="w-full px-3 py-1.5 text-xs rounded-xl border border-gray-300">
                     {% for c in coaches %}
                         <option value="{{ c.id }}" {% if profile and (profile.coach_id == c.id or profile.coach_name == c.name) %}selected{% endif %}>
-                            {{ c.name }}
+                            {{ c.name }} — {{ c.specialty }}
                         </option>
                     {% endfor %}
                 </select>

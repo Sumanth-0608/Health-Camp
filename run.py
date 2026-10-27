@@ -9,7 +9,7 @@ if __name__ == '__main__':
     debug = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 't')
     
     print("=" * 65)
-    print("  90-DAY WELLNESS TRACKER WEB APPLICATION")
+    print("  DR. GIRIJA'S NUTRILIFE WEB APPLICATION")
     print(f"  Server running at: http://{host}:{port}/")
     print(f"  Admin portal at:   http://{host}:{port}/admin")
     print("=" * 65)

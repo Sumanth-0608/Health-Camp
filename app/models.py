@@ -4,6 +4,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
+PRIMARY_COACH_NAME = "Dr. Girija Pashikanti"
+PRIMARY_COACH_SPECIALTY = "Nutritionist (Pharmacology)"
+PRIMARY_COACH_EMAIL = "dr.girija.pashikanti@nutrilife.invalid"
+
 def utc_now():
     return datetime.now(timezone.utc)
 
@@ -25,6 +29,11 @@ class Coach(db.Model):
             'email': self.email,
             'specialty': self.specialty
         }
+
+
+def get_primary_coach():
+    return Coach.query.filter_by(name=PRIMARY_COACH_NAME, is_active=True).first()
+
 
 class User(db.Model):
     __tablename__ = 'users'

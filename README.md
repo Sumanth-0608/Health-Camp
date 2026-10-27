@@ -1,4 +1,4 @@
-# 90-Day Wellness Tracker Web Application
+# Dr. Girija's NutriLife
 
 A full-stack digital companion and coaching tracker for a 90-day holistic wellness program. Built directly from the Excel workbook requirements (`90 Day Tracker.xlsx`), digitally preserving all seven worksheets, their exact formulas, auto-calculations, and tracking rules.
 
@@ -97,16 +97,23 @@ copy .env.example .env
 ```
 Local development uses SQLite by default. Production requires a hosted PostgreSQL URL in `DATABASE_URL` and a private `SECRET_KEY`.
 
-### 5. Initialize the Database & Seed Default Coaches
+### 5. Initialize the Database & Primary Coach
 Run the explicit initialization script against the database selected by `DATABASE_URL`:
 ```bash
 python init_db.py
 ```
-This will:
+This repeatable command will:
 - Create missing database tables without dropping existing tables or data.
-- Seed the 4 default wellness coaches (*Sarah Jenkins, Dr. Michael Chen, Priya Sharma, David Miller*).
+- Ensure Dr. Girija Pashikanti — Nutritionist (Pharmacology) is the only active coach.
+- Reassign existing coach-linked participant profiles to Dr. Girija and deactivate (not delete) old coach records.
 
-To create an administrator, opt in explicitly and provide an unused email. The script prompts for the account details and password; it does not create or reset an admin by default:
+To create or update the NutriLife administrator, run this explicit command. It prompts for the account password twice without echoing it; the password is stored using the existing Werkzeug hash:
+```bash
+python init_db.py --configure-nutrilife-admin
+```
+The account username is `drgirijasnutrilife.com`. Running this command again updates the existing admin password rather than creating duplicate accounts. It refuses to elevate an existing participant account.
+
+The existing generic admin creation option remains available for other administrator accounts:
 ```bash
 python init_db.py --create-admin --admin-email you@example.com
 ```
@@ -123,7 +130,7 @@ Open your browser and navigate to:
 
 ## 🧪 Running Automated Tests
 
-A comprehensive test suite covering all 16 required workflows is included in `tests/test_wellness_app.py`.
+A comprehensive test suite covering the original 16 workflows plus coach-migration and admin-authentication regressions is included in `tests/test_wellness_app.py`.
 
 To run the test suite:
 ```bash
@@ -161,13 +168,15 @@ python -m unittest tests/test_wellness_app.py
 
 ## Production Deployment
 
-For Vercel, create a hosted PostgreSQL database with a provider of your choice. Copy its application connection URL from that provider's dashboard; do not use a locally invented URL. Add these Vercel Environment Variables for the Production environment:
+For Vercel, create a hosted PostgreSQL database with a provider of your choice. Copy its application connection URL from that provider's dashboard; do not use a locally invented URL. Keep these Vercel Environment Variables for the Production environment:
 
 - `DATABASE_URL`: the provider's PostgreSQL connection URL. The app accepts `postgres://` or `postgresql://` and uses the Psycopg 3 driver.
 - `SECRET_KEY`: a privately generated, high-entropy value. Do not commit it or use the development placeholder.
 - `APP_ENV`: `production`.
 
-Install dependencies and initialize the database once, explicitly, using `python init_db.py` with `DATABASE_URL` set to the same hosted database. This creates missing tables and seeds coaches; it does not create an administrator unless `--create-admin` is explicitly supplied. The project does not currently include a schema migration framework, so use a migration process before future schema changes.
+No new public environment variable is required. Before deploying, run `python init_db.py` with `DATABASE_URL` set privately to the same hosted PostgreSQL database. This safely creates missing tables, repoints existing coach-linked profiles, and deactivates the prior coach records without deleting participant records.
+
+Then run `python init_db.py --configure-nutrilife-admin` against that same database and enter the requested administrator password at the hidden prompt. Do not put the password in source code, command-line arguments, `.env.example`, or Vercel frontend variables. These are explicit one-time/operator commands; the app does not create or reset administrators at startup. Redeploy after deploying the code; no schema migration framework or database column change is introduced by this update.
 
 Vercel's function filesystem is temporary. The current upload code writes photos and reports under `UPLOAD_FOLDER`, so production uploads need external persistent object storage and corresponding storage integration in `app/utils.py` and the upload route. Setting `UPLOAD_FOLDER` to a Vercel path alone does not make uploaded files durable.
 

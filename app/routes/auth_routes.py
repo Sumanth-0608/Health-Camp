@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g
-from ..models import db, User, ParticipantProfile, Coach
+from ..models import db, User, ParticipantProfile, get_primary_coach
 from ..auth import login_user, logout_user, get_current_user, login_required, initialize_participant_records
 from ..utils import save_uploaded_file, allowed_file
 from flask import current_app
@@ -13,7 +13,8 @@ def register():
     if get_current_user():
         return redirect(url_for('dashboard.index'))
         
-    coaches = Coach.query.filter_by(is_active=True).all()
+    primary_coach = get_primary_coach()
+    coaches = [primary_coach] if primary_coach else []
     
     if request.method == 'POST':
         full_name = request.form.get('full_name', '').strip()
@@ -22,7 +23,6 @@ def register():
         password = request.form.get('password', '')
         confirm_password = request.form.get('confirm_password', '')
         coach_id = request.form.get('coach_id', '').strip()
-        coach_name = request.form.get('coach_name', '').strip()
         start_date_str = request.form.get('start_date', '').strip()
         goal_90_day = request.form.get('goal_90_day', '').strip()
         reason_why = request.form.get('reason_why', '').strip()
@@ -52,6 +52,8 @@ def register():
             errors.append("Session day and preferred time are required.")
         if not root_cause_1 or not root_cause_2:
             errors.append("Both primary root causes/challenges are required.")
+        if not primary_coach or coach_id != str(primary_coach.id):
+            errors.append("Please select the available NutriLife coach.")
             
         # Check existing user
         if User.query.filter_by(email=email).first():
@@ -79,14 +81,6 @@ def register():
                     flash("Invalid image format for profile photo. Allowed: JPG, PNG, WEBP.", "warning")
                     
         # Determine coach
-        selected_coach = None
-        if coach_id and coach_id.isdigit():
-            selected_coach = db.session.get(Coach, int(coach_id))
-            if selected_coach:
-                coach_name = selected_coach.name
-        if not coach_name:
-            coach_name = "Assigned upon onboarding"
-
         # Create user (Strictly participant role)
         user = User(
             email=email,
@@ -103,8 +97,8 @@ def register():
         # Create participant profile
         profile = ParticipantProfile(
             user_id=user.id,
-            coach_id=selected_coach.id if selected_coach else None,
-            coach_name=coach_name,
+            coach_id=primary_coach.id,
+            coach_name=primary_coach.name,
             start_date=start_date_val,
             goal_90_day=goal_90_day,
             reason_why=reason_why,
@@ -120,7 +114,7 @@ def register():
         
         # Automatically login participant
         login_user(user)
-        flash(f"Welcome to your 90-Day Wellness Journey, {user.full_name}! Your personal tracker is ready.", "success")
+        flash(f"Welcome to Dr. Girija's NutriLife, {user.full_name}! Your personal tracker is ready.", "success")
         return redirect(url_for('dashboard.index'))
         
     today_str = date.today().strftime('%Y-%m-%d')

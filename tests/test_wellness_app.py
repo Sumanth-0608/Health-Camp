@@ -7,9 +7,13 @@ from app import create_app
 from app.models import (
     db, User, ParticipantProfile, Coach, DailyLog, Meal, 
     WaterLog, MovementEntry, HabitDay, Measurement, BloodReport, 
-    WeeklyScore, SupportConversation, SupportMessage
+    WeeklyScore, SupportConversation, SupportMessage,
+    PRIMARY_COACH_NAME, PRIMARY_COACH_SPECIALTY
 )
 from app.config import Config, _database_uri, _secret_key
+from init_db import (
+    NUTRILIFE_ADMIN_USERNAME, configure_nutrilife_admin, seed_coaches
+)
 
 class TestConfig(Config):
     TESTING = True
@@ -66,11 +70,11 @@ class WellnessTrackerTests(unittest.TestCase):
         self.ctx.push()
         db.create_all()
         
-        # Seed test coach
+        # Seed the only supported coach
         self.coach = Coach(
-            name="Coach Sarah",
-            email="sarah@testwellness.com",
-            specialty="Nutrition Patterns"
+            name=PRIMARY_COACH_NAME,
+            email="dr.girija.pashikanti@nutrilife.invalid",
+            specialty=PRIMARY_COACH_SPECIALTY
         )
         db.session.add(self.coach)
         
@@ -101,6 +105,13 @@ class WellnessTrackerTests(unittest.TestCase):
 
     # 1. New participant registration
     def test_01_participant_registration(self):
+        registration_page = self.client.get('/register').get_data(as_text=True)
+        self.assertEqual(registration_page.count("<option"), 1)
+        self.assertIn(
+            f"{PRIMARY_COACH_NAME} — {PRIMARY_COACH_SPECIALTY}",
+            registration_page
+        )
+
         start_date_str = (date.today() - timedelta(days=5)).strftime('%Y-%m-%d')
         response = self.client.post('/register', data={
             'full_name': 'Alice Participant',
@@ -118,18 +129,121 @@ class WellnessTrackerTests(unittest.TestCase):
         }, follow_redirects=True)
         
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Welcome to your 90-Day Wellness Journey", response.data)
+        self.assertIn(b"Welcome to Dr. Girija&#39;s NutriLife", response.data)
         
         user = User.query.filter_by(email='alice@example.com').first()
         self.assertIsNotNone(user)
         self.assertEqual(user.role, 'participant')
         self.assertIsNotNone(user.profile)
-        self.assertEqual(user.profile.coach_name, 'Coach Sarah')
+        self.assertEqual(user.profile.coach_id, self.coach.id)
+        self.assertEqual(user.profile.coach_name, PRIMARY_COACH_NAME)
         
         # Check that standard records were initialized
         self.assertEqual(Measurement.query.filter_by(participant_id=user.id).count(), 13)
         self.assertEqual(BloodReport.query.filter_by(participant_id=user.id).count(), 15)
         self.assertEqual(WeeklyScore.query.filter_by(participant_id=user.id).count(), 12)
+
+        self.client.get('/logout')
+        login_response = self.client.post('/login', data={
+            'email': 'alice@example.com',
+            'password': 'password123'
+        }, follow_redirects=True)
+        self.assertEqual(login_response.status_code, 200)
+        db.session.expire_all()
+        persisted_profile = User.query.filter_by(email='alice@example.com').first().profile
+        self.assertEqual(persisted_profile.coach_name, PRIMARY_COACH_NAME)
+        self.assertEqual(persisted_profile.coach_id, self.coach.id)
+
+    def test_registration_rejects_another_active_coach_id(self):
+        other_coach = Coach(
+            name="Unexpected Coach",
+            email="unexpected-coach@example.com",
+            specialty="Not selectable"
+        )
+        db.session.add(other_coach)
+        db.session.commit()
+
+        response = self.client.post('/register', data={
+            'full_name': 'Invalid Coach Participant',
+            'email': 'invalid-coach@example.com',
+            'mobile': '12345',
+            'password': 'password123',
+            'confirm_password': 'password123',
+            'coach_id': str(other_coach.id),
+            'start_date': date.today().strftime('%Y-%m-%d'),
+            'goal_90_day': 'Build healthier routines',
+            'reason_why': 'Feel better every day',
+            'session_day_time': 'Wednesdays at 7 PM',
+            'root_cause_1': 'Late nights',
+            'root_cause_2': 'Inactivity'
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Please select the available NutriLife coach.", response.data)
+        self.assertIsNone(User.query.filter_by(email='invalid-coach@example.com').first())
+
+    def test_coach_initialization_preserves_profiles_and_deactivates_old_coaches(self):
+        legacy_coaches = [
+            Coach(name="Legacy Coach One", email="legacy-one@example.com"),
+            Coach(name="Legacy Coach Two", email="legacy-two@example.com")
+        ]
+        participant = User(
+            email="legacy-participant@example.com",
+            full_name="Legacy Participant",
+            mobile="12345",
+            role="participant"
+        )
+        participant.set_password("Secret123!")
+        db.session.add_all([*legacy_coaches, participant])
+        db.session.flush()
+        db.session.add(ParticipantProfile(
+            user_id=participant.id,
+            coach_id=legacy_coaches[0].id,
+            coach_name=legacy_coaches[0].name,
+            start_date=date.today()
+        ))
+        db.session.commit()
+
+        seed_coaches()
+        seed_coaches()
+
+        db.session.expire_all()
+        profile = ParticipantProfile.query.filter_by(user_id=participant.id).one()
+        self.assertEqual(profile.coach_id, self.coach.id)
+        self.assertEqual(profile.coach_name, PRIMARY_COACH_NAME)
+        self.assertEqual(Coach.query.filter_by(is_active=True).count(), 1)
+        self.assertEqual(Coach.query.count(), 3)
+        self.assertEqual(User.query.filter_by(email=participant.email).count(), 1)
+
+    def test_configured_admin_login_hashing_and_invalid_credentials(self):
+        password = "LocalTestPassword123!"
+        configure_nutrilife_admin(
+            password,
+            full_name="Dr. Girija Pashikanti",
+            mobile="12345"
+        )
+        configure_nutrilife_admin(password)
+
+        admin = User.query.filter_by(email=NUTRILIFE_ADMIN_USERNAME).one()
+        self.assertTrue(admin.is_admin)
+        self.assertNotEqual(admin.password_hash, password)
+        self.assertTrue(admin.check_password(password))
+
+        response = self.client.post('/login', data={
+            'email': NUTRILIFE_ADMIN_USERNAME,
+            'password': password
+        }, follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Dr. Girija's NutriLife Admin Dashboard", response.data)
+
+        self.client.get('/logout')
+        invalid_response = self.client.post('/login', data={
+            'email': NUTRILIFE_ADMIN_USERNAME,
+            'password': 'incorrect-password'
+        }, follow_redirects=True)
+        self.assertEqual(invalid_response.status_code, 200)
+        self.assertIn(b"Invalid email or password", invalid_response.data)
+        self.assertNotIn(b"Protected Administration Portal", invalid_response.data)
 
     # 2. Returning participant login
     def test_02_participant_login(self):

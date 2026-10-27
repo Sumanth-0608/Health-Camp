@@ -3,7 +3,8 @@ import csv
 from datetime import date, datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g, make_response, abort
 from ..models import (
-    db, User, ParticipantProfile, Coach, DailyLog, Meal, WaterLog, 
+    db, User, ParticipantProfile, DailyLog, Meal, WaterLog,
+    get_primary_coach,
     MovementEntry, HabitWeek, HabitDay, Measurement, BloodReport, 
     WeeklyScore, SupportConversation, SupportMessage
 )
@@ -93,7 +94,8 @@ def participants():
         )
         
     users = query.order_by(User.created_at.desc()).all()
-    coaches = Coach.query.filter_by(is_active=True).all()
+    primary_coach = get_primary_coach()
+    coaches = [primary_coach] if primary_coach else []
     
     # Filter in memory if coach_filter or status_filter
     filtered_users = []
@@ -123,7 +125,8 @@ def participants():
 def participant_detail(user_id):
     participant = User.query.filter_by(id=user_id, role='participant').first_or_404()
     profile = participant.profile
-    coaches = Coach.query.filter_by(is_active=True).all()
+    primary_coach = get_primary_coach()
+    coaches = [primary_coach] if primary_coach else []
     today = date.today()
     program_day = profile.get_program_day(today) if profile else 0
     
@@ -171,9 +174,9 @@ def participant_detail(user_id):
 @admin_required
 def update_coach(user_id):
     participant = User.query.filter_by(id=user_id, role='participant').first_or_404()
-    coach_id = request.form.get('coach_id')
-    coach = db.session.get(Coach, int(coach_id)) if coach_id and coach_id.isdigit() else None
-    if coach and participant.profile:
+    coach_id = request.form.get('coach_id', '').strip()
+    coach = get_primary_coach()
+    if coach and coach_id == str(coach.id) and participant.profile:
         participant.profile.coach_id = coach.id
         participant.profile.coach_name = coach.name
         db.session.commit()

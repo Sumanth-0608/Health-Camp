@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for
 from ..auth import get_current_user
-from ..models import Coach
+from ..models import get_primary_coach
 
 main_bp = Blueprint('main', __name__)
 
@@ -12,7 +12,8 @@ def index():
             return redirect(url_for('admin.dashboard'))
         return redirect(url_for('dashboard.index'))
         
-    coaches = Coach.query.filter_by(is_active=True).all()
+    coach = get_primary_coach()
+    coaches = [coach] if coach else []
     return render_template('index.html', coaches=coaches)
 
 @main_bp.route('/about')

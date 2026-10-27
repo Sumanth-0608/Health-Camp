@@ -1,7 +1,8 @@
 from datetime import date, datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g, current_app, jsonify
 from ..models import (
-    db, User, ParticipantProfile, Coach, DailyLog, Meal, WaterLog, 
+    db, User, ParticipantProfile, DailyLog, Meal, WaterLog,
+    get_primary_coach,
     WaterGoal, MovementEntry, HabitWeek, HabitDay, Measurement, 
     BloodReport, WeeklyScore, SupportConversation
 )
@@ -188,7 +189,8 @@ def index():
 def profile():
     user = g.current_user
     profile = user.profile
-    coaches = Coach.query.filter_by(is_active=True).all()
+    primary_coach = get_primary_coach()
+    coaches = [primary_coach] if primary_coach else []
     
     if request.method == 'POST':
         action = request.form.get('action')
@@ -198,7 +200,7 @@ def profile():
             full_name = request.form.get('full_name', '').strip()
             mobile = request.form.get('mobile', '').strip()
             coach_id = request.form.get('coach_id', '').strip()
-            coach_name = request.form.get('coach_name', '').strip()
+            coach = get_primary_coach()
             goal_90_day = request.form.get('goal_90_day', '').strip()
             reason_why = request.form.get('reason_why', '').strip()
             session_day_time = request.form.get('session_day_time', '').strip()
@@ -211,19 +213,16 @@ def profile():
             if not mobile:
                 flash("Mobile number cannot be blank.", "danger")
                 return redirect(url_for('dashboard.profile'))
+            if not coach or coach_id != str(coach.id):
+                flash("Please select the available NutriLife coach.", "danger")
+                return redirect(url_for('dashboard.profile'))
                 
             user.full_name = full_name
             user.mobile = mobile
             
             if profile:
-                if coach_id and coach_id.isdigit():
-                    coach = db.session.get(Coach, int(coach_id))
-                    if coach:
-                        profile.coach_id = coach.id
-                        profile.coach_name = coach.name
-                elif coach_name:
-                    profile.coach_name = coach_name
-                    
+                profile.coach_id = coach.id
+                profile.coach_name = coach.name
                 profile.goal_90_day = goal_90_day
                 profile.reason_why = reason_why
                 profile.session_day_time = session_day_time
