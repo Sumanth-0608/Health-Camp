@@ -7,7 +7,12 @@ from ..models import (
     BloodReport, WeeklyScore, SupportConversation
 )
 from ..auth import login_required, get_current_user
-from ..utils import save_uploaded_file, delete_uploaded_file, allowed_file
+from ..utils import (
+    UploadStorageError,
+    save_uploaded_file,
+    delete_uploaded_file,
+    allowed_file,
+)
 
 participant_bp = Blueprint('dashboard', __name__)
 
@@ -239,13 +244,31 @@ def profile():
                 file = request.files['profile_photo']
                 if file and file.filename:
                     if allowed_file(file.filename, current_app.config['ALLOWED_IMAGE_EXTENSIONS']):
-                        # Delete old photo if existed
-                        if user.profile_photo:
-                            delete_uploaded_file(user.profile_photo)
-                        new_path = save_uploaded_file(file, 'profiles', current_app.config['ALLOWED_IMAGE_EXTENSIONS'])
+                        try:
+                            new_path = save_uploaded_file(
+                                file,
+                                'profiles',
+                                current_app.config['ALLOWED_IMAGE_EXTENSIONS']
+                            )
+                        except UploadStorageError:
+                            flash(
+                                "Profile photo upload failed. Your existing photo was kept.",
+                                "danger"
+                            )
+                            return redirect(url_for('dashboard.profile'))
+
+                        old_path = user.profile_photo
                         user.profile_photo = new_path
                         db.session.commit()
                         flash("Profile photo updated successfully!", "success")
+                        if old_path:
+                            try:
+                                delete_uploaded_file(old_path)
+                            except UploadStorageError:
+                                flash(
+                                    "The old photo could not be removed from storage.",
+                                    "warning"
+                                )
                     else:
                         flash("Invalid image format. Supported formats: JPG, PNG, WEBP.", "danger")
                 else:
@@ -255,10 +278,17 @@ def profile():
         # 3. Remove Profile Photo
         elif action == 'remove_photo':
             if user.profile_photo:
-                delete_uploaded_file(user.profile_photo)
+                old_path = user.profile_photo
                 user.profile_photo = None
                 db.session.commit()
                 flash("Profile photo removed.", "info")
+                try:
+                    delete_uploaded_file(old_path)
+                except UploadStorageError:
+                    flash(
+                        "The photo could not be removed from storage.",
+                        "warning"
+                    )
             return redirect(url_for('dashboard.profile'))
             
         # 4. Change Password

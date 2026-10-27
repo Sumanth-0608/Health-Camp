@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from sqlalchemy.exc import SQLAlchemyError
 from ..models import db, User, ParticipantProfile, ensure_primary_coach
 from ..auth import login_user, logout_user, get_current_user, login_required, initialize_participant_records
-from ..utils import save_uploaded_file, allowed_file
+from ..utils import UploadStorageError, save_uploaded_file, allowed_file
 from flask import current_app
 
 auth_bp = Blueprint('auth', __name__)
@@ -89,7 +89,17 @@ def register():
             file = request.files['profile_photo']
             if file and file.filename:
                 if allowed_file(file.filename, current_app.config['ALLOWED_IMAGE_EXTENSIONS']):
-                    profile_photo_path = save_uploaded_file(file, 'profiles', current_app.config['ALLOWED_IMAGE_EXTENSIONS'])
+                    try:
+                        profile_photo_path = save_uploaded_file(
+                            file,
+                            'profiles',
+                            current_app.config['ALLOWED_IMAGE_EXTENSIONS']
+                        )
+                    except UploadStorageError:
+                        flash(
+                            "Profile photo upload failed. You can upload it later from your profile.",
+                            "warning"
+                        )
                 else:
                     flash("Invalid image format for profile photo. Allowed: JPG, PNG, WEBP.", "warning")
                     

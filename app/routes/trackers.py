@@ -6,7 +6,12 @@ from ..models import (
     BloodReport, WeeklyScore
 )
 from ..auth import login_required
-from ..utils import save_uploaded_file, delete_uploaded_file, allowed_file
+from ..utils import (
+    UploadStorageError,
+    save_uploaded_file,
+    delete_uploaded_file,
+    allowed_file,
+)
 
 trackers_bp = Blueprint('trackers', __name__, url_prefix='/trackers')
 
@@ -127,23 +132,43 @@ def food():
             meal.meal_time = meal_time
             meal.food_description = food_description
             meal.notes = notes
+            uploads_to_delete = []
             
             if remove_photo and meal.photo_path:
-                delete_uploaded_file(meal.photo_path)
+                uploads_to_delete.append(meal.photo_path)
                 meal.photo_path = None
                 
             # Optional photo upload
             photo_file = request.files.get(f'photo_{slot}') or request.files.get('meal_photo')
             if photo_file and photo_file.filename:
                 if allowed_file(photo_file.filename, current_app.config['ALLOWED_IMAGE_EXTENSIONS']):
-                    if meal.photo_path:
-                        delete_uploaded_file(meal.photo_path)
-                    saved_path = save_uploaded_file(photo_file, 'meals', current_app.config['ALLOWED_IMAGE_EXTENSIONS'])
-                    meal.photo_path = saved_path
+                    try:
+                        saved_path = save_uploaded_file(
+                            photo_file,
+                            'meals',
+                            current_app.config['ALLOWED_IMAGE_EXTENSIONS']
+                        )
+                    except UploadStorageError:
+                        flash(
+                            "Meal photo upload failed. Your meal details were saved.",
+                            "danger"
+                        )
+                    else:
+                        if meal.photo_path:
+                            uploads_to_delete.append(meal.photo_path)
+                        meal.photo_path = saved_path
                 else:
                     flash("Invalid image format for meal photo. Allowed: JPG, PNG, WEBP.", "warning")
                     
             db.session.commit()
+            for stored_path in set(uploads_to_delete):
+                try:
+                    delete_uploaded_file(stored_path)
+                except UploadStorageError:
+                    flash(
+                        "A replaced meal photo could not be removed from storage.",
+                        "warning"
+                    )
             flash(f"{dict(Meal.MEAL_SLOTS).get(slot, 'Meal')} details saved successfully.", "success")
             return redirect(url_for('trackers.food', date=target_date.strftime('%Y-%m-%d')))
             
@@ -575,18 +600,48 @@ def reports():
                 test_report.day90_result = d_res or None
                 test_report.ideal_range = ideal or None
                 test_report.notes = notes or None
+                old_report_path = None
+                upload_error = False
                 
                 # Check optional file upload for this test
                 if 'report_file' in request.files:
                     f = request.files['report_file']
-                    if f and f.filename and allowed_file(f.filename, current_app.config['ALLOWED_REPORT_EXTENSIONS']):
-                        if test_report.report_file_path:
-                            delete_uploaded_file(test_report.report_file_path)
-                        path = save_uploaded_file(f, 'reports', current_app.config['ALLOWED_REPORT_EXTENSIONS'], optimize_image=False)
-                        test_report.report_file_path = path
+                    if f and f.filename:
+                        if allowed_file(f.filename, current_app.config['ALLOWED_REPORT_EXTENSIONS']):
+                            try:
+                                path = save_uploaded_file(
+                                    f,
+                                    'reports',
+                                    current_app.config['ALLOWED_REPORT_EXTENSIONS'],
+                                    optimize_image=False
+                                )
+                            except UploadStorageError:
+                                upload_error = True
+                            else:
+                                old_report_path = test_report.report_file_path
+                                test_report.report_file_path = path
+                        else:
+                            flash(
+                                "Invalid lab report format. Allowed: PDF, JPG, PNG, WEBP.",
+                                "warning"
+                            )
                         
                 db.session.commit()
-                flash(f"Updated results for {test_report.test_name}.", "success")
+                if old_report_path:
+                    try:
+                        delete_uploaded_file(old_report_path)
+                    except UploadStorageError:
+                        flash(
+                            "The replaced report could not be removed from storage.",
+                            "warning"
+                        )
+                if upload_error:
+                    flash(
+                        "Report upload failed; your results were saved and the previous report was kept.",
+                        "danger"
+                    )
+                else:
+                    flash(f"Updated results for {test_report.test_name}.", "success")
                 return redirect(url_for('trackers.reports'))
                 
         # Add custom lab test

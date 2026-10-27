@@ -1,50 +1,99 @@
+
 from pathlib import Path
-from flask import Blueprint, send_from_directory, abort, current_app, g
-from ..auth import login_required, get_current_user
-from ..models import Meal, BloodReport, User
 
-uploads_bp = Blueprint('uploads', __name__)
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    redirect,
+    make_response,
+    send_from_directory,
+)
 
-@uploads_bp.route('/uploads/<folder>/<filename>')
+from ..auth import get_current_user
+from ..models import BloodReport, Meal
+from ..utils import REPORT_PREFIX, get_private_report_url
+
+
+uploads_bp = Blueprint("uploads", __name__)
+
+
+@uploads_bp.route("/uploads/<folder>/<path:filename>")
 def serve_file(folder, filename):
-    # Only allow known subfolders
-    if folder not in {'profiles', 'meals', 'reports'}:
+    if folder not in {"profiles", "meals", "reports"}:
         abort(404)
-        
-    upload_dir = Path(current_app.config['UPLOAD_FOLDER']) / folder
-    file_path = upload_dir / filename
+
+    user = get_current_user()
+
+    # All meal photos and blood reports require login.
+    if folder in {"meals", "reports"} and not user:
+        abort(401)
+
+    # Private Cloudinary blood report: check ownership before redirecting.
+    if folder == "reports" and filename.startswith(REPORT_PREFIX):
+        report_query = BloodReport.query.filter_by(
+            report_file_path=filename
+        )
+
+        if user.is_admin:
+            report = report_query.first()
+        else:
+            report = report_query.filter_by(
+                participant_id=user.id
+            ).first()
+
+        if not report:
+            abort(404)
+
+        signed_url = get_private_report_url(filename)
+        if not signed_url:
+            abort(503)
+
+        response = make_response(redirect(signed_url))
+        response.headers["Cache-Control"] = "private, no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+
+    # Never serve a persisted public Cloudinary report URL directly.
+    if folder == "reports" and filename.startswith(("https://", "http://")):
+        abort(404)
+
+    # Cloudinary image URLs can be displayed directly.
+    # This route handles only local/legacy uploads and private reports.
+    upload_root = Path(current_app.config["UPLOAD_FOLDER"]).resolve()
+    upload_dir = (upload_root / folder).resolve()
+
+    if upload_root not in upload_dir.parents:
+        abort(404)
+
+    file_path = (upload_dir / filename).resolve()
+
+    if upload_dir not in file_path.parents:
+        abort(404)
+
     if not file_path.is_file():
         abort(404)
-        
-    rel_path = f"{folder}/{filename}"
-    
-    # Check permissions based on folder
-    user = get_current_user()
-    
-    # Profiles can be viewed by authenticated users (or anyone for default coach/demo badges)
-    if folder == 'profiles':
+
+    # Profile photos are not private records.
+    if folder == "profiles":
         return send_from_directory(upload_dir, filename)
-        
-    # Meals and Reports require authentication and strict ownership verification
-    if not user:
-        abort(401)
-        
+
+    # Verify that the requested legacy file belongs to the user.
+    relative_path = f"{folder}/{filename}"
+
+    if folder == "meals":
+        query = Meal.query.filter_by(photo_path=relative_path)
+    else:
+        query = BloodReport.query.filter_by(
+            report_file_path=relative_path
+        )
+
     if user.is_admin:
-        # Admins can view participants' meals and reports for coaching review
-        return send_from_directory(upload_dir, filename)
-        
-    if folder == 'meals':
-        # Check if the meal belongs to the current user
-        meal = Meal.query.filter_by(participant_id=user.id, photo_path=rel_path).first()
-        if not meal:
-            abort(403)
-        return send_from_directory(upload_dir, filename)
-        
-    if folder == 'reports':
-        # Check if report belongs to current user
-        report = BloodReport.query.filter_by(participant_id=user.id, report_file_path=rel_path).first()
-        if not report:
-            abort(403)
-        return send_from_directory(upload_dir, filename)
-        
-    abort(403)
+        record = query.first()
+    else:
+        record = query.filter_by(participant_id=user.id).first()
+
+    if not record:
+        abort(404)
+
+    return send_from_directory(upload_dir, filename)

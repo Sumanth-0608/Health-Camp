@@ -76,9 +76,14 @@
                             <td class="p-3 text-gray-500 max-w-xs truncate">{{ r.notes or '—' }}</td>
                             <td class="p-3 text-right">
                                 {% if r.report_file_path %}
-                                    <a href="{{ url_for('uploads.serve_file', folder='reports', filename=r.report_file_path.split('/')[-1]) }}" target="_blank" class="px-2 py-0.5 bg-sky-100 hover:bg-sky-200 text-sky-800 text-[10px] font-bold rounded">
-                                        View File
-                                    </a>
+                                    {% set report_url = upload_url('reports', r.report_file_path) %}
+                                    {% if report_url %}
+                                        <a href="{{ report_url }}" target="_blank" rel="noopener noreferrer" class="px-2 py-0.5 bg-sky-100 hover:bg-sky-200 text-sky-800 text-[10px] font-bold rounded">
+                                            View File
+                                        </a>
+                                    {% else %}
+                                        <span class="text-gray-400 text-[11px]">Unavailable</span>
+                                    {% endif %}
                                 {% else %}
                                     <span class="text-gray-400 text-[11px]">None</span>
                                 {% endif %}
@@ -121,9 +126,14 @@
                                 <td class="p-3 text-gray-500 max-w-xs truncate">{{ r.notes or '—' }}</td>
                                 <td class="p-3 text-right">
                                     {% if r.report_file_path %}
-                                        <a href="{{ url_for('uploads.serve_file', folder='reports', filename=r.report_file_path.split('/')[-1]) }}" target="_blank" class="px-2 py-0.5 bg-sky-100 hover:bg-sky-200 text-sky-800 text-[10px] font-bold rounded">
-                                            View File
-                                        </a>
+                                        {% set report_url = upload_url('reports', r.report_file_path) %}
+                                        {% if report_url %}
+                                            <a href="{{ report_url }}" target="_blank" rel="noopener noreferrer" class="px-2 py-0.5 bg-sky-100 hover:bg-sky-200 text-sky-800 text-[10px] font-bold rounded">
+                                                View File
+                                            </a>
+                                        {% else %}
+                                            <span class="text-gray-400 text-[11px]">Unavailable</span>
+                                        {% endif %}
                                     {% else %}
                                         <span class="text-gray-400 text-[11px]">None</span>
                                     {% endif %}

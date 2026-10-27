@@ -1,9 +1,11 @@
 import os
 import io
+import time
 import unittest
 from unittest.mock import patch
 from datetime import date, timedelta, datetime
 from sqlalchemy.exc import OperationalError
+from werkzeug.datastructures import FileStorage
 from app import create_app
 from app.models import (
     db, User, ParticipantProfile, Coach, DailyLog, Meal, 
@@ -14,6 +16,14 @@ from app.models import (
 from app.config import Config, _database_uri, _secret_key
 from init_db import (
     NUTRILIFE_ADMIN_USERNAME, configure_nutrilife_admin, seed_coaches
+)
+from app.utils import (
+    PRIVATE_URL_TTL_SECONDS,
+    REPORT_PREFIX,
+    UploadStorageError,
+    delete_uploaded_file,
+    get_private_report_url,
+    save_uploaded_file,
 )
 
 class TestConfig(Config):
@@ -342,17 +352,306 @@ class WellnessTrackerTests(unittest.TestCase):
             sess['user_id'] = user.id
             
         img_buf, img_name = self.create_dummy_image("charlie_avatar.jpg")
-        resp = self.client.post('/profile', data={
-            'action': 'update_photo',
-            'profile_photo': (img_buf, img_name)
-        }, content_type='multipart/form-data', follow_redirects=True)
+        with patch('app.utils.configure_cloudinary', return_value=True), patch(
+            'app.utils.cloudinary.uploader.upload',
+            return_value={
+                'public_id': 'nutrilife/profiles/profile-id',
+                'resource_type': 'image',
+                'secure_url': 'https://res.cloudinary.com/test/image/upload/profile.jpg',
+            },
+        ) as cloudinary_upload:
+            resp = self.client.post('/profile', data={
+                'action': 'update_photo',
+                'profile_photo': (img_buf, img_name)
+            }, content_type='multipart/form-data', follow_redirects=True)
         
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Profile photo updated successfully!", resp.data)
         
         updated_user = db.session.get(User, user.id)
         self.assertIsNotNone(updated_user.profile_photo)
-        self.assertTrue(updated_user.profile_photo.startswith('profiles/'))
+        self.assertEqual(
+            updated_user.profile_photo,
+            'https://res.cloudinary.com/test/image/upload/profile.jpg'
+        )
+        self.assertIn(
+            b'https://res.cloudinary.com/test/image/upload/profile.jpg',
+            resp.data,
+        )
+        self.assertEqual(cloudinary_upload.call_count, 1)
+        self.assertEqual(
+            cloudinary_upload.call_args.kwargs['filename'],
+            img_name,
+        )
+
+    def test_profile_photo_upload_handles_missing_cloudinary_credentials(self):
+        user = User(
+            email='profile-upload-error@example.com',
+            full_name='Profile Upload Error',
+            mobile='12345',
+            role='participant',
+        )
+        user.set_password('pass123')
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(ParticipantProfile(user_id=user.id, start_date=date.today()))
+        db.session.commit()
+
+        with self.client.session_transaction() as session:
+            session['user_id'] = user.id
+
+        image, filename = self.create_dummy_image('profile.jpg')
+        with patch.dict(os.environ, {}, clear=True):
+            response = self.client.post(
+                '/profile',
+                data={
+                    'action': 'update_photo',
+                    'profile_photo': (image, filename),
+                },
+                content_type='multipart/form-data',
+                follow_redirects=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Profile photo upload failed.', response.data)
+        self.assertIsNone(db.session.get(User, user.id).profile_photo)
+
+    def test_cloudinary_storage_uses_private_report_delivery_and_correct_deletes(self):
+        report = FileStorage(stream=io.BytesIO(b"report"), filename="report.pdf")
+        with patch("app.utils.configure_cloudinary", return_value=True), patch(
+            "app.utils.cloudinary.uploader.upload",
+            return_value={
+                "public_id": "nutrilife/reports/report-id",
+                "resource_type": "raw",
+            },
+        ) as upload:
+            stored_path = save_uploaded_file(
+                report,
+                "reports",
+                allowed_extensions={"jpg", "pdf"},
+            )
+
+        self.assertEqual(
+            stored_path,
+            f"{REPORT_PREFIX}raw:pdf:nutrilife/reports/report-id",
+        )
+        self.assertEqual(upload.call_args.kwargs["resource_type"], "raw")
+        self.assertEqual(upload.call_args.kwargs["type"], "authenticated")
+        self.assertEqual(upload.call_args.kwargs["filename"], "report.pdf")
+
+        before = int(time.time())
+        with patch("app.utils.configure_cloudinary", return_value=True), patch(
+            "app.utils.cloudinary.utils.private_download_url",
+            return_value="https://res.cloudinary.com/test/private",
+        ) as private_url:
+            self.assertEqual(get_private_report_url(stored_path),
+                             "https://res.cloudinary.com/test/private")
+        options = private_url.call_args.kwargs
+        self.assertEqual(options["resource_type"], "raw")
+        self.assertEqual(options["type"], "authenticated")
+        self.assertEqual(private_url.call_args.args[1], "pdf")
+        self.assertGreaterEqual(
+            options["expires_at"],
+            before + PRIVATE_URL_TTL_SECONDS,
+        )
+
+        with patch("app.utils.configure_cloudinary", return_value=True), patch(
+            "app.utils.cloudinary.uploader.destroy",
+            return_value={"result": "ok"},
+        ) as destroy:
+            delete_uploaded_file(stored_path)
+        destroy.assert_called_once_with(
+            "nutrilife/reports/report-id",
+            resource_type="raw",
+            type="authenticated",
+            invalidate=True,
+        )
+
+    def test_upload_without_cloudinary_credentials_raises_safe_storage_error(self):
+        image = FileStorage(stream=io.BytesIO(b"image"), filename="meal.jpg")
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(
+                UploadStorageError,
+                "Cloudinary is not configured",
+            ):
+                save_uploaded_file(
+                    image,
+                    "meals",
+                    allowed_extensions={"jpg"},
+                )
+
+    def test_cloudinary_public_meal_and_private_image_report(self):
+        meal_photo = FileStorage(stream=io.BytesIO(b"image"), filename="meal.webp")
+        with patch("app.utils.configure_cloudinary", return_value=True), patch(
+            "app.utils.cloudinary.uploader.upload",
+            return_value={
+                "public_id": "meal-id",
+                "resource_type": "image",
+                "secure_url": "https://res.cloudinary.com/test/image/upload/meal-id.webp",
+            },
+        ) as upload:
+            meal_path = save_uploaded_file(
+                meal_photo,
+                "meals",
+                allowed_extensions={"webp"},
+            )
+
+        self.assertEqual(
+            meal_path,
+            "https://res.cloudinary.com/test/image/upload/meal-id.webp",
+        )
+        self.assertEqual(upload.call_args.kwargs["resource_type"], "image")
+        self.assertEqual(upload.call_args.kwargs["folder"], "nutrilife/meals")
+        self.assertEqual(upload.call_args.kwargs["filename"], "meal.webp")
+        self.assertNotIn("type", upload.call_args.kwargs)
+
+        report_image = FileStorage(stream=io.BytesIO(b"image"), filename="scan.png")
+        with patch("app.utils.configure_cloudinary", return_value=True), patch(
+            "app.utils.cloudinary.uploader.upload",
+            return_value={
+                "public_id": "nutrilife/reports/scan-id",
+                "resource_type": "image",
+            },
+        ) as upload:
+            report_path = save_uploaded_file(
+                report_image,
+                "reports",
+                allowed_extensions={"png"},
+            )
+
+        self.assertEqual(
+            report_path,
+            f"{REPORT_PREFIX}image:png:nutrilife/reports/scan-id",
+        )
+        self.assertEqual(upload.call_args.kwargs["resource_type"], "image")
+        self.assertEqual(upload.call_args.kwargs["type"], "authenticated")
+        self.assertEqual(upload.call_args.kwargs["filename"], "scan.png")
+
+        with patch("app.utils.configure_cloudinary", return_value=True), patch(
+            "app.utils.cloudinary.utils.private_download_url",
+            return_value="https://res.cloudinary.com/test/private-image",
+        ) as private_url:
+            self.assertEqual(
+                get_private_report_url(report_path),
+                "https://res.cloudinary.com/test/private-image",
+            )
+        self.assertEqual(private_url.call_args.args[1], "png")
+        self.assertEqual(private_url.call_args.kwargs["resource_type"], "image")
+        self.assertEqual(private_url.call_args.kwargs["type"], "authenticated")
+
+    def test_private_report_route_requires_owner_or_admin(self):
+        participant = User(
+            email="report-owner@example.com",
+            full_name="Report Owner",
+            mobile="12345",
+            role="participant",
+        )
+        participant.set_password("Secret123!")
+        other_participant = User(
+            email="other-owner@example.com",
+            full_name="Other Owner",
+            mobile="12346",
+            role="participant",
+        )
+        other_participant.set_password("Secret123!")
+        db.session.add_all([participant, other_participant])
+        db.session.flush()
+        stored_path = f"{REPORT_PREFIX}raw:pdf:reports/report-id"
+        db.session.add(BloodReport(
+            participant_id=participant.id,
+            test_name="Lab report",
+            report_file_path=stored_path,
+        ))
+        db.session.commit()
+        report_url = f"/uploads/reports/{stored_path}"
+
+        self.assertEqual(self.client.get(report_url).status_code, 401)
+
+        with patch(
+            "app.routes.uploads.get_private_report_url",
+            return_value="https://res.cloudinary.com/test/temporary",
+        ) as private_url:
+            with self.client.session_transaction() as session:
+                session["user_id"] = other_participant.id
+            self.assertEqual(self.client.get(report_url).status_code, 404)
+
+            with self.client.session_transaction() as session:
+                session["user_id"] = participant.id
+            owner_response = self.client.get(report_url)
+            self.assertEqual(owner_response.status_code, 302)
+            self.assertEqual(
+                owner_response.headers["Location"],
+                "https://res.cloudinary.com/test/temporary",
+            )
+            self.assertEqual(owner_response.headers["Cache-Control"], "private, no-store")
+            self.assertEqual(
+                owner_response.headers["Referrer-Policy"],
+                "no-referrer",
+            )
+
+            with self.client.session_transaction() as session:
+                session["user_id"] = self.admin.id
+            self.assertEqual(self.client.get(report_url).status_code, 302)
+            self.assertEqual(private_url.call_count, 2)
+
+    def test_upload_url_helper_routes_private_reports_and_keeps_public_images(self):
+        public_image = "https://res.cloudinary.com/test/image/upload/meal.jpg"
+        private_report = f"{REPORT_PREFIX}raw:pdf:reports/report-id"
+        with self.app.test_request_context():
+            context = {}
+            self.app.update_template_context(context)
+            upload_url = context["upload_url"]
+
+            self.assertEqual(upload_url("meals", public_image), public_image)
+            self.assertEqual(
+                upload_url("profiles", "profiles/legacy-photo.jpg"),
+                "/uploads/profiles/legacy-photo.jpg",
+            )
+            self.assertEqual(
+                upload_url("reports", private_report),
+                "/uploads/reports/cloudinary_private:raw:pdf:reports/report-id",
+            )
+            self.assertEqual(
+                upload_url(
+                    "reports",
+                    "https://res.cloudinary.com/test/raw/upload/public-report.pdf",
+                ),
+                "",
+            )
+
+    def test_dashboard_renders_profile_photo_url_without_changing_layout(self):
+        image_url = "https://res.cloudinary.com/test/image/upload/profile.jpg"
+        user = User(
+            email="dashboard-photo@example.com",
+            full_name="Dashboard Participant",
+            mobile="12345",
+            role="participant",
+            profile_photo=image_url,
+        )
+        user.set_password("Secret123!")
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(ParticipantProfile(
+            user_id=user.id,
+            start_date=date.today(),
+            coach_name=PRIMARY_COACH_NAME,
+        ))
+        db.session.add(Measurement(
+            participant_id=user.id,
+            week_number=0,
+            week_label="Start",
+            weight_kg=72.0,
+        ))
+        db.session.commit()
+
+        with self.client.session_transaction() as session:
+            session["user_id"] = user.id
+
+        response = self.client.get("/dashboard")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(image_url.encode(), response.data)
+        self.assertIn(b'id="measurementsChart"', response.data)
+        self.assertIn(b"Hydration Progress", response.data)
 
     # 4. Save a meal without a photo
     def test_04_save_meal_without_photo(self):
@@ -395,19 +694,39 @@ class WellnessTrackerTests(unittest.TestCase):
             
         img_buf, img_name = self.create_dummy_image("lunch_salad.jpg")
         today_str = date.today().strftime('%Y-%m-%d')
-        resp = self.client.post(f'/trackers/food?date={today_str}', data={
-            'action': 'save_meal',
-            'meal_slot': 'lunch',
-            'meal_time': '1:00 PM',
-            'food_description': 'Grilled salmon with asparagus and quinoa',
-            'meal_photo': (img_buf, img_name)
-        }, content_type='multipart/form-data', follow_redirects=True)
+        with patch('app.utils.configure_cloudinary', return_value=True), patch(
+            'app.utils.cloudinary.uploader.upload',
+            return_value={
+                'public_id': 'nutrilife/meals/meal-id',
+                'resource_type': 'image',
+                'secure_url': 'https://res.cloudinary.com/test/image/upload/meal.jpg',
+            },
+        ) as cloudinary_upload:
+            resp = self.client.post(f'/trackers/food?date={today_str}', data={
+                'action': 'save_meal',
+                'meal_slot': 'lunch',
+                'meal_time': '1:00 PM',
+                'food_description': 'Grilled salmon with asparagus and quinoa',
+                'meal_photo': (img_buf, img_name)
+            }, content_type='multipart/form-data', follow_redirects=True)
         
         self.assertEqual(resp.status_code, 200)
         meal = Meal.query.filter_by(participant_id=user.id, meal_slot='lunch').first()
         self.assertIsNotNone(meal)
         self.assertIsNotNone(meal.photo_path)
-        self.assertTrue(meal.photo_path.startswith('meals/'))
+        self.assertEqual(
+            meal.photo_path,
+            'https://res.cloudinary.com/test/image/upload/meal.jpg'
+        )
+        self.assertIn(
+            b'https://res.cloudinary.com/test/image/upload/meal.jpg',
+            resp.data,
+        )
+        self.assertEqual(cloudinary_upload.call_count, 1)
+        self.assertEqual(
+            cloudinary_upload.call_args.kwargs['filename'],
+            img_name,
+        )
 
     # 6. Meal records and photos remain available after re-login
     def test_06_meal_persistence_after_relogin(self):

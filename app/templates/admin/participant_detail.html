@@ -26,7 +26,7 @@
     <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div class="flex items-center space-x-5">
             {% if participant.profile_photo %}
-                <img src="{{ url_for('uploads.serve_file', folder='profiles', filename=participant.profile_photo.split('/')[-1]) }}" alt="{{ participant.full_name }}" class="w-20 h-20 rounded-2xl object-cover border-2 border-emerald-600 shadow-sm">
+                <img src="{{ upload_url('profiles', participant.profile_photo) }}" alt="{{ participant.full_name }}" class="w-20 h-20 rounded-2xl object-cover border-2 border-emerald-600 shadow-sm">
             {% else %}
                 <div class="w-20 h-20 rounded-2xl bg-emerald-800 text-white flex items-center justify-center font-bold text-3xl shadow-sm">
                     {{ participant.full_name[:1] }}
@@ -115,7 +115,7 @@
                     {% endif %}
                     {% if m.photo_path %}
                         <div class="pt-2">
-                            <img src="{{ url_for('uploads.serve_file', folder='meals', filename=m.photo_path.split('/')[-1]) }}" alt="Meal Photo" class="w-full h-32 object-cover rounded-xl border border-gray-300">
+                            <img src="{{ upload_url('meals', m.photo_path) }}" alt="Meal Photo" class="w-full h-32 object-cover rounded-xl border border-gray-300">
                         </div>
                     {% endif %}
                 </div>
@@ -236,9 +236,14 @@
                                 <td class="p-2.5 text-gray-500">{{ br.ideal_range or '—' }}</td>
                                 <td class="p-2.5 text-right">
                                     {% if br.report_file_path %}
-                                        <a href="{{ url_for('uploads.serve_file', folder='reports', filename=br.report_file_path.split('/')[-1]) }}" target="_blank" class="text-sky-700 font-bold hover:underline">
-                                            View Report File
-                                        </a>
+                                        {% set report_url = upload_url('reports', br.report_file_path) %}
+                                        {% if report_url %}
+                                            <a href="{{ report_url }}" target="_blank" rel="noopener noreferrer" class="text-sky-700 font-bold hover:underline">
+                                                View Report File
+                                            </a>
+                                        {% else %}
+                                            <span class="text-gray-400">Report unavailable</span>
+                                        {% endif %}
                                     {% else %}
                                         —
                                     {% endif %}

@@ -72,7 +72,7 @@
                             <td class="p-3">
                                 <div class="flex items-center space-x-3">
                                     {% if u.profile_photo %}
-                                        <img src="{{ url_for('uploads.serve_file', folder='profiles', filename=u.profile_photo.split('/')[-1]) }}" alt="{{ u.full_name }}" class="w-8 h-8 rounded-full object-cover border border-emerald-600">
+                                        <img src="{{ upload_url('profiles', u.profile_photo) }}" alt="{{ u.full_name }}" class="w-8 h-8 rounded-full object-cover border border-emerald-600">
                                     {% else %}
                                         <div class="w-8 h-8 rounded-full bg-emerald-800 text-white flex items-center justify-center font-bold text-xs">
                                             {{ u.full_name[:1] }}

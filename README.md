@@ -173,14 +173,19 @@ For Vercel, create a hosted PostgreSQL database with a provider of your choice. 
 - `DATABASE_URL`: the provider's PostgreSQL connection URL. The app accepts `postgres://` or `postgresql://` and uses the Psycopg 3 driver.
 - `SECRET_KEY`: a privately generated, high-entropy value. Do not commit it or use the development placeholder.
 - `APP_ENV`: `production`.
+- `CLOUDINARY_CLOUD_NAME`: the Cloudinary cloud name.
+- `CLOUDINARY_API_KEY`: the Cloudinary API key.
+- `CLOUDINARY_API_SECRET`: the Cloudinary API secret. Keep it server-side; never expose it in frontend configuration.
 
-No new public environment variable is required. On the first request to `/register`, the application now safely creates or reactivates the primary coach in the configured database if the record is missing. This makes the production registration page self-healing without relying on a local database or a Vercel build-time script. The operation is repeatable and does not delete or rewrite participant records.
+Set the three Cloudinary variables in Vercel's server-side Production environment (and in Preview/Development only if those deployments need uploads). For local development, set them in the ignored `.env` file. The application uploads directly to Cloudinary; it does not depend on Vercel's read-only filesystem for durable uploads. Profile and meal images use public Cloudinary delivery. Blood reports use authenticated Cloudinary assets and are only redirected to a five-minute signed URL after the server verifies the report owner or an administrator. The response is marked private and non-cacheable. Do not share report download links; they remain usable until their explicit expiry.
+
+On the first request to `/register`, the application safely creates or reactivates the primary coach in the configured database if the record is missing. This makes the production registration page self-healing without relying on a local database or a Vercel build-time script. The operation is repeatable and does not delete or rewrite participant records.
 
 For a planned database initialization, run `python init_db.py` from an operator environment whose `DATABASE_URL` is securely set to the hosted production database. It creates missing tables, ensures the primary coach, repoints existing coach-linked profiles, and deactivates old coaches without deleting their rows or participant data. Do not run it against the local SQLite database expecting it to update production.
 
 To provision the administrator, run `python init_db.py --configure-nutrilife-admin` against that same hosted database and enter the requested password at the hidden prompt. Do not put the password in source code, command-line arguments, `.env.example`, or Vercel frontend variables. Administrator accounts are not created or reset at application startup. Deploy the application code, then visit `/register`; no coach-specific environment variable or schema change is required.
 
-Vercel's function filesystem is temporary. The current upload code writes photos and reports under `UPLOAD_FOLDER`, so production uploads need external persistent object storage and corresponding storage integration in `app/utils.py` and the upload route. Setting `UPLOAD_FOLDER` to a Vercel path alone does not make uploaded files durable.
+Vercel's function filesystem is temporary and read-only for durable storage. New uploads go directly to Cloudinary. Existing legacy local upload paths are still served from `UPLOAD_FOLDER` when their files exist, but files present only on a previous deployment's temporary filesystem cannot be recovered by this compatibility path.
 
 The local SQLite database is for development only. Vercel app imports do not create tables or run the initialization script; the registration request ensures the primary coach record in whichever configured database the live app uses.
 #   H e a l t h - C a m p 

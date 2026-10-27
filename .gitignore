@@ -8,3 +8,5 @@ __pycache__/
 instance/
 uploads/
 .pytest_cache/
+.vercel
+.env*
