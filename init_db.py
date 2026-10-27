@@ -3,27 +3,13 @@ from getpass import getpass
 from app import create_app
 from app.models import (
     db, User, Coach, ParticipantProfile,
-    PRIMARY_COACH_NAME, PRIMARY_COACH_SPECIALTY, PRIMARY_COACH_EMAIL
+    PRIMARY_COACH_NAME, PRIMARY_COACH_SPECIALTY, ensure_primary_coach
 )
 NUTRILIFE_ADMIN_USERNAME = "drgirijasnutrilife.com"
 
 def seed_coaches():
+    primary_coach = ensure_primary_coach()
     coaches = Coach.query.order_by(Coach.id).all()
-    primary_coach = next(
-        (coach for coach in coaches if coach.name == PRIMARY_COACH_NAME),
-        None
-    )
-    if not primary_coach:
-        primary_coach = Coach.query.filter_by(email=PRIMARY_COACH_EMAIL).first()
-    if not primary_coach:
-        primary_coach = Coach(
-            name=PRIMARY_COACH_NAME,
-            email=PRIMARY_COACH_EMAIL,
-            specialty=PRIMARY_COACH_SPECIALTY,
-            is_active=True
-        )
-        db.session.add(primary_coach)
-        db.session.flush()
 
     retired_coach_names = {
         coach.name for coach in coaches if coach.id != primary_coach.id

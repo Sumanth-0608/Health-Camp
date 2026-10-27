@@ -1,6 +1,7 @@
 from datetime import datetime, date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g
-from ..models import db, User, ParticipantProfile, get_primary_coach
+from sqlalchemy.exc import SQLAlchemyError
+from ..models import db, User, ParticipantProfile, ensure_primary_coach
 from ..auth import login_user, logout_user, get_current_user, login_required, initialize_participant_records
 from ..utils import save_uploaded_file, allowed_file
 from flask import current_app
@@ -13,7 +14,19 @@ def register():
     if get_current_user():
         return redirect(url_for('dashboard.index'))
         
-    primary_coach = get_primary_coach()
+    try:
+        primary_coach = ensure_primary_coach()
+    except (SQLAlchemyError, ValueError):
+        db.session.rollback()
+        current_app.logger.exception("Could not load the registration coach.")
+        return render_template(
+            'auth/register.html',
+            coaches=[],
+            coach_error=True,
+            today_str=date.today().strftime('%Y-%m-%d'),
+            form=request.form if request.method == 'POST' else {}
+        ), 503
+
     coaches = [primary_coach] if primary_coach else []
     
     if request.method == 'POST':

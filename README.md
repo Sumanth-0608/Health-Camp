@@ -174,13 +174,15 @@ For Vercel, create a hosted PostgreSQL database with a provider of your choice. 
 - `SECRET_KEY`: a privately generated, high-entropy value. Do not commit it or use the development placeholder.
 - `APP_ENV`: `production`.
 
-No new public environment variable is required. Before deploying, run `python init_db.py` with `DATABASE_URL` set privately to the same hosted PostgreSQL database. This safely creates missing tables, repoints existing coach-linked profiles, and deactivates the prior coach records without deleting participant records.
+No new public environment variable is required. On the first request to `/register`, the application now safely creates or reactivates the primary coach in the configured database if the record is missing. This makes the production registration page self-healing without relying on a local database or a Vercel build-time script. The operation is repeatable and does not delete or rewrite participant records.
 
-Then run `python init_db.py --configure-nutrilife-admin` against that same database and enter the requested administrator password at the hidden prompt. Do not put the password in source code, command-line arguments, `.env.example`, or Vercel frontend variables. These are explicit one-time/operator commands; the app does not create or reset administrators at startup. Redeploy after deploying the code; no schema migration framework or database column change is introduced by this update.
+For a planned database initialization, run `python init_db.py` from an operator environment whose `DATABASE_URL` is securely set to the hosted production database. It creates missing tables, ensures the primary coach, repoints existing coach-linked profiles, and deactivates old coaches without deleting their rows or participant data. Do not run it against the local SQLite database expecting it to update production.
+
+To provision the administrator, run `python init_db.py --configure-nutrilife-admin` against that same hosted database and enter the requested password at the hidden prompt. Do not put the password in source code, command-line arguments, `.env.example`, or Vercel frontend variables. Administrator accounts are not created or reset at application startup. Deploy the application code, then visit `/register`; no coach-specific environment variable or schema change is required.
 
 Vercel's function filesystem is temporary. The current upload code writes photos and reports under `UPLOAD_FOLDER`, so production uploads need external persistent object storage and corresponding storage integration in `app/utils.py` and the upload route. Setting `UPLOAD_FOLDER` to a Vercel path alone does not make uploaded files durable.
 
-The local SQLite database is for development only. Vercel app imports do not create tables or run the initialization script.
+The local SQLite database is for development only. Vercel app imports do not create tables or run the initialization script; the registration request ensures the primary coach record in whichever configured database the live app uses.
 #   H e a l t h - C a m p 
  
  

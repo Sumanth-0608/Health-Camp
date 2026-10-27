@@ -3,11 +3,12 @@ import io
 import unittest
 from unittest.mock import patch
 from datetime import date, timedelta, datetime
+from sqlalchemy.exc import OperationalError
 from app import create_app
 from app.models import (
     db, User, ParticipantProfile, Coach, DailyLog, Meal, 
     WaterLog, MovementEntry, HabitDay, Measurement, BloodReport, 
-    WeeklyScore, SupportConversation, SupportMessage,
+    WeeklyScore, SupportConversation, SupportMessage, ensure_primary_coach,
     PRIMARY_COACH_NAME, PRIMARY_COACH_SPECIALTY
 )
 from app.config import Config, _database_uri, _secret_key
@@ -181,6 +182,69 @@ class WellnessTrackerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Please select the available NutriLife coach.", response.data)
         self.assertIsNone(User.query.filter_by(email='invalid-coach@example.com').first())
+
+    def test_registration_creates_missing_coach_and_persists_assignment(self):
+        db.session.delete(self.coach)
+        db.session.commit()
+
+        page = self.client.get('/register')
+        coach = Coach.query.filter_by(name=PRIMARY_COACH_NAME, is_active=True).one()
+        page_text = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page_text.count("<option"), 1)
+        self.assertIn(
+            f'<option value="{coach.id}">{PRIMARY_COACH_NAME} — '
+            f'{PRIMARY_COACH_SPECIALTY}</option>',
+            page_text
+        )
+
+        response = self.client.post('/register', data={
+            'full_name': 'Coach Migration Participant',
+            'email': 'coach-migration@example.com',
+            'mobile': '12345',
+            'password': 'password123',
+            'confirm_password': 'password123',
+            'coach_id': str(coach.id),
+            'start_date': date.today().strftime('%Y-%m-%d'),
+            'goal_90_day': 'Build healthier routines',
+            'reason_why': 'Feel better every day',
+            'session_day_time': 'Wednesdays at 7 PM',
+            'root_cause_1': 'Late nights',
+            'root_cause_2': 'Inactivity'
+        }, follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+
+        participant = User.query.filter_by(
+            email='coach-migration@example.com'
+        ).one()
+        self.assertEqual(participant.profile.coach_id, coach.id)
+        self.assertEqual(participant.profile.coach_name, PRIMARY_COACH_NAME)
+
+        self.client.get('/logout')
+        self.client.post('/login', data={
+            'email': participant.email,
+            'password': 'password123'
+        }, follow_redirects=True)
+        db.session.expire_all()
+        persisted = User.query.filter_by(email=participant.email).one()
+        self.assertEqual(persisted.profile.coach_id, coach.id)
+        self.assertEqual(persisted.profile.coach_name, PRIMARY_COACH_NAME)
+
+    def test_registration_displays_database_coach_load_failure(self):
+        with patch(
+            'app.routes.auth_routes.ensure_primary_coach',
+            side_effect=OperationalError(
+                "SELECT coach", {}, Exception("database unavailable")
+            )
+        ):
+            response = self.client.get('/register')
+
+        page_text = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("Coach information is temporarily unavailable.", page_text)
+        self.assertIn("We could not load coach information.", page_text)
+        self.assertIn('name="coach_id" required disabled', page_text)
+        self.assertIn('type="submit" disabled', page_text)
 
     def test_coach_initialization_preserves_profiles_and_deactivates_old_coaches(self):
         legacy_coaches = [

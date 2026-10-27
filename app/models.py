@@ -1,5 +1,6 @@
 from datetime import datetime, date, timezone
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
@@ -33,6 +34,40 @@ class Coach(db.Model):
 
 def get_primary_coach():
     return Coach.query.filter_by(name=PRIMARY_COACH_NAME, is_active=True).first()
+
+
+def ensure_primary_coach():
+    coach = Coach.query.filter_by(name=PRIMARY_COACH_NAME).order_by(Coach.id).first()
+    if coach:
+        changed = not coach.is_active or coach.specialty != PRIMARY_COACH_SPECIALTY
+        coach.specialty = PRIMARY_COACH_SPECIALTY
+        coach.is_active = True
+        if changed:
+            db.session.commit()
+        return coach
+
+    if Coach.query.filter_by(email=PRIMARY_COACH_EMAIL).first():
+        raise ValueError("The primary coach email is already assigned to another coach.")
+
+    coach = Coach(
+        name=PRIMARY_COACH_NAME,
+        email=PRIMARY_COACH_EMAIL,
+        specialty=PRIMARY_COACH_SPECIALTY,
+        is_active=True
+    )
+    db.session.add(coach)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        coach = Coach.query.filter_by(
+            name=PRIMARY_COACH_NAME,
+            is_active=True
+        ).order_by(Coach.id).first()
+        if coach:
+            return coach
+        raise
+    return coach
 
 
 class User(db.Model):
